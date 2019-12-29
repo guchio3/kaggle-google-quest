@@ -5,7 +5,5 @@
  1. clone this repo
      - `cd; git clone git@github.com:guchio3/kaggle-google-quest.git; cd kaggle-google-quest`
  1. run commands
-     _ train : 
-     _ predict : 
-     _ debug : 
-     _ notebooks : `docker-compose run --service-ports jn`
+     _ python commands : `docker-compose run python {something.py}`
+     _ notebooks       : `docker-compose run --service-ports jn`
