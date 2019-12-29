@@ -1,0 +1,16 @@
+version: "3"
+services:
+    jn:
+        build: .
+        container_name: jupyter_notebook
+        volumes:
+          - $PWD:/root/workspace
+          - $HOME/.ssh:/root/.ssh
+          - $HOME/mnt:/root/mnt
+        working_dir: /root/workspace/notebooks
+        #        runtime: nvidia
+        environment:
+            - TZ=Asia/Tokyo
+        ports:
+          - 8888:8888
+        command: jupyter notebook --ip=0.0.0.0 --allow-root --no-browser
