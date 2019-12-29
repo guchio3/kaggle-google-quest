@@ -8,4 +8,4 @@
      _ train : 
      _ predict : 
      _ debug : 
-     _ use notebooks : 
+     _ notebooks : `docker-compose run --service-ports jn`
