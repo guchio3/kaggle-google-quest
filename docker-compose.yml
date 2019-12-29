@@ -1,5 +1,16 @@
 version: '2.3'
 services:
+    shell:
+        build: .
+        volumes:
+            - $PWD:/root/workspace
+            - $HOME/mnt:/root/mnt
+        working_dir: /root/workspace
+        runtime: nvidia
+        environment:
+            - TZ=Asia/Tokyo
+            - LD_LIBRARY_PATH=/usr/local/cuda/lib64
+        entrypoint: bash
     python:
         build: .
         volumes:
@@ -10,8 +21,6 @@ services:
         environment:
             - TZ=Asia/Tokyo
             - LD_LIBRARY_PATH=/usr/local/cuda/lib64
-        ports:
-            - 6900:6900
         entrypoint: python
     jn:
         build: .
@@ -21,7 +30,7 @@ services:
         working_dir: /root/workspace/notebooks
         runtime: nvidia
         environment:
-           - TZ=Asia/Tokyo
+            - TZ=Asia/Tokyo
             - LD_LIBRARY_PATH=/usr/local/cuda/lib64
         ports:
             - 8888:8888

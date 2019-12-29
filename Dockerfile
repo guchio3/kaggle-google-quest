@@ -1,9 +1,22 @@
 FROM kaggle/python-gpu-build:latest
 
+# set env
+ENV LC_ALL "en_US.UTF-8"
+
 # set dotfiles
 WORKDIR /root
 RUN git clone https://github.com/guchio3/guchio_utils.git
 RUN rm .bashrc && ln -s /root/guchio_utils/.bashrc .bashrc
+RUN rm .config/pudb/pudb.cfg &&ln -s /root/guchio_utils/pudb/pudb.cfg .config/pudb/pudb.cfg
+
+# install git-completion.bash and git-prompt.sh
+RUN wget https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.bash -O ~/.git-completion.bash \
+        && chmod a+x ~/.git-completion.bash
+RUN wget https://raw.githubusercontent.com/git/git/master/contrib/completion/git-prompt.sh -O ~/.git-prompt.sh \
+        && chmod a+x ~/.git-prompt.sh
+
+# install conda packages
+RUN conda install -y -c conda-forge pudb
 
 # set jupyter notebook
 # jupyter vim key-bind settings
