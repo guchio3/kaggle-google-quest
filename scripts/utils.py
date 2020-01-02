@@ -2,7 +2,10 @@ import argparse
 import functools
 import os
 import time
+from glob import glob
 from logging import DEBUG, FileHandler, Formatter, StreamHandler
+
+import pandas as pd
 
 import requests
 import torch
@@ -139,3 +142,31 @@ def save_checkpoint(save_dir, exp_id, model, optimizer, scheduler,
     }
     sel_log(f'now saving checkpoint to {cp_filename} ...', None)
     torch.save(cp_dict, cp_filename)
+
+
+def save_and_clean_for_prediction(cp_dir, tokenizer):
+    checkpoints = glob(f'{cp_dir}/*')
+    cp_dict = {}
+    for checkpoint in checkpoints:
+        cp_dict['checkpoint'] = checkpoint
+        splitted_checkpoint = checkpoint.split('/')[-1].split('_')
+        cp_dict['fold'] = splitted_checkpoint
+        cp_dict['epoch'] = splitted_checkpoint
+        cp_dict['val_loss'] = splitted_checkpoint
+        cp_dict['val_metric'] = splitted_checkpoint
+
+    best_dict = {'tokenizer': tokenizer}
+    cp_df = pd.DataFrame(cp_dict)
+    for fold, grp_df in cp_df.groupby('fold'):
+        best_row = grp_df.sort_values('val_metric').iloc[-1]
+        best_dict[fold] = torch.load(best_row['checkpoint'])['model_state_dict']
+        send_line_notification(f'fold: {fold} -- val_metric: {best_row["val_metric"]:.4f}')
+    torch.save(best_dict, f'{cp_dir}/best_dict.pth')
+
+    # clean dir
+    for checkpoint in checkpoints:
+        os.remove(checkpoint)
+
+
+if __name__ == '__main__':
+    save_and_clean_for_prediction('../mnt/checkpoints/e001', None)
