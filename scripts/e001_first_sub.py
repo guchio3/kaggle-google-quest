@@ -1,5 +1,6 @@
 import os
 import sys
+from logging import getLogger
 
 import numpy as np
 import pandas as pd
@@ -11,15 +12,15 @@ from sklearn.model_selection import GroupKFold
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
-from tqdm import tqdm_notebook as tqdm
+from tqdm import tqdm
 
 from datasets import QUESTDataset
 from metrics import compute_spearmanr, soft_binary_cross_entropy
 from models.bert_model_binary_multilabel_classifier import \
     BertModelBinaryMultiLabelClassifier
 from transformers import BertForMaskedLM, BertModel, BertTokenizer
-from utils import (dec_timer, logInit, parse_args, sel_log,
-                   send_line_notification, save_checkpoint)
+from utils import (dec_timer, logInit, parse_args, save_checkpoint, sel_log,
+                   send_line_notification)
 
 EXP_ID = 'e001'
 MNT_DIR = '../mnt/'
@@ -205,5 +206,10 @@ def main(args, logger):
 
 
 if __name__ == '__main__':
-    a
+    args = parse_args(None)
+    log_file = f'{MNT_DIR}/logs/{EXP_ID}.log'
+    logger = getLogger(__name__)
+    logger = logInit(logger, './mnt/logs/', log_file)
+    sel_log(f'args: {sorted(vars(args).items())}', logger)
+
     main(args, logger)
