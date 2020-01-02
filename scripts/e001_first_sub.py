@@ -23,11 +23,11 @@ from utils import (dec_timer, logInit, parse_args, save_checkpoint, sel_log,
                    send_line_notification)
 
 EXP_ID = 'e001'
-MNT_DIR = '../mnt/'
+MNT_DIR = '../mnt'
 DEVICE = 'cuda'
 PRETRAIN = 'bert-base-uncased'
-BATCH_SIZE = 6
-MAX_EPOCH = 5
+BATCH_SIZE = 24
+MAX_EPOCH = 10
 
 
 def train_one_epoch(model, fobj, optimizer, loader):
@@ -154,7 +154,7 @@ def main(args, logger):
             qa_ids=val_qa_ids,
             augment=[],
             pretrained_model_name_or_path='bert-base-uncased',
-            data_path='{MNT_DIR}/inputs/origin/')
+            data_path=f'{MNT_DIR}/inputs/origin/')
         val_sampler = RandomSampler(data_source=val_dataset)
         val_loader = DataLoader(val_dataset,
                                 batch_size=BATCH_SIZE,
@@ -207,9 +207,9 @@ def main(args, logger):
 
 if __name__ == '__main__':
     args = parse_args(None)
-    log_file = f'{MNT_DIR}/logs/{EXP_ID}.log'
+    log_file = f'{EXP_ID}.log'
     logger = getLogger(__name__)
-    logger = logInit(logger, './mnt/logs/', log_file)
+    logger = logInit(logger, f'{MNT_DIR}/logs', log_file)
     sel_log(f'args: {sorted(vars(args).items())}', logger)
 
     main(args, logger)

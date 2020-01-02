@@ -120,5 +120,5 @@ def save_checkpoint(save_dir, exp_id, model, optimizer, scheduler,
         'scheduler_state_dict': scheduler.state_dict(),
         'histories': histories,
     }
-    sel_log(f'now saving checkpoint to {cp_filename} ...')
+    sel_log(f'now saving checkpoint to {cp_filename} ...', None)
     torch.save(cp_dict, cp_filename)
