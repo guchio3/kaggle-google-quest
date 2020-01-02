@@ -19,8 +19,8 @@ from metrics import compute_spearmanr, soft_binary_cross_entropy
 from models.bert_model_binary_multilabel_classifier import \
     BertModelBinaryMultiLabelClassifier
 from transformers import BertForMaskedLM, BertModel, BertTokenizer
-from utils import (dec_timer, logInit, parse_args, save_checkpoint, sel_log,
-                   send_line_notification)
+from utils import (dec_timer, logInit, parse_args, load_checkpoint, save_checkpoint,
+                   sel_log, send_line_notification)
 
 EXP_ID = 'e001'
 MNT_DIR = '../mnt'
@@ -128,7 +128,13 @@ def main(args, logger):
         'val_loss': [],
         'val_metric': [],
     }
+    loaded_fold = -1
+    loaded_epoch = -1
+    if args.checkpoint:
+        histories, loaded_fold, loaded_epoch = load_checkpoint(args.checkpoint)
     for fold, (trn_idx, val_idx) in enumerate(gkf):
+        if fold < loaded_fold:
+            continue
         trn_qa_ids = trn_df.iloc[trn_idx].qa_id
         val_qa_ids = trn_df.iloc[val_idx].qa_id
         if args.debug:
@@ -174,7 +180,13 @@ def main(args, logger):
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
 
+        # load checkpoint model, optim, scheduler
+        if args.checkpoint and fold == loaded_fold:
+            load_checkpoint(args.checkpoint, model, optimizer, scheduler)
+
         for epoch in tqdm(list(range(MAX_EPOCH))):
+            if fold <= loaded_fold and epoch <= loaded_epoch:
+                continue
             trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader)
             val_loss, val_metric, val_y_preds, val_y_trues, val_qa_ids = test(
                 model, val_loader)

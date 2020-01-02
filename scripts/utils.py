@@ -88,7 +88,7 @@ def parse_args(logger=None):
         description='short explanation of args',
         add_help=True,
     )
-    parser.add_argument('-t', '--checkpoint',
+    parser.add_argument('-c', '--checkpoint',
                         help='the checkpoint u use',
                         type=str,
                         required=False,
@@ -101,6 +101,20 @@ def parse_args(logger=None):
     args = parser.parse_args()
     sel_log(f'args: {sorted(vars(args).items())}', logger)
     return args
+
+
+def load_checkpoint(cp_filename, model=None, optimizer=None, scheduler=None):
+    checkpoint = torch.load(cp_filename)
+    if model:
+        model.load_state_dict(checkpoint['model_state_dict'])
+    if optimizer:
+        optimizer.load_state_dict(checkpoint['optim_state_dict'])
+    if scheduler:
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+    histories = checkpoint['histories']
+    current_fold = checkpoint['current_fold']
+    current_epoch = checkpoint['current_epoch']
+    return histories, current_fold, current_epoch
 
 
 def save_checkpoint(save_dir, exp_id, model, optimizer, scheduler,
@@ -119,6 +133,9 @@ def save_checkpoint(save_dir, exp_id, model, optimizer, scheduler,
         'optim_state_dict': optimizer.state_dict(),
         'scheduler_state_dict': scheduler.state_dict(),
         'histories': histories,
+        'val_y_preds': val_y_preds,
+        'val_y_trues': val_y_trues,
+        'val_qa_ids': val_qa_ids,
     }
     sel_log(f'now saving checkpoint to {cp_filename} ...', None)
     torch.save(cp_dict, cp_filename)
