@@ -164,8 +164,7 @@ def main(args, logger):
                                 pin_memory=True)
 
         fobj = soft_binary_cross_entropy
-        model = BertModelForBinaryMultiLabelClassifier(fobj=fobj,
-                                                       num_labels=30,
+        model = BertModelForBinaryMultiLabelClassifier(num_labels=30,
                                                        pretrained_model_name_or_path=PRETRAIN
                                                        ).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=3e-5)
@@ -215,7 +214,7 @@ if __name__ == '__main__':
     args = parse_args(None)
     log_file = f'{EXP_ID}.log'
     logger = getLogger(__name__)
-    logger = logInit(logger, f'{MNT_DIR}/logs', log_file)
+    logger = logInit(logger, f'{MNT_DIR}/logs/', log_file)
     sel_log(f'args: {sorted(vars(args).items())}', logger)
 
     main(args, logger)

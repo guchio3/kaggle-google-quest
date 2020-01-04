@@ -146,17 +146,20 @@ def save_checkpoint(save_dir, exp_id, model, optimizer, scheduler,
 
 def save_and_clean_for_prediction(cp_dir, tokenizer):
     checkpoints = glob(f'{cp_dir}/*')
-    cp_dict = {}
+
+    cp_df_base = []
     for checkpoint in checkpoints:
+        cp_dict = {}
         cp_dict['checkpoint'] = checkpoint
         splitted_checkpoint = checkpoint.split('/')[-1].split('_')
-        cp_dict['fold'] = splitted_checkpoint
-        cp_dict['epoch'] = splitted_checkpoint
-        cp_dict['val_loss'] = splitted_checkpoint
-        cp_dict['val_metric'] = splitted_checkpoint
+        cp_dict['fold'] = splitted_checkpoint[1]
+        cp_dict['epoch'] = splitted_checkpoint[3]
+        cp_dict['val_loss'] = splitted_checkpoint[4]
+        cp_dict['val_metric'] = splitted_checkpoint[5]
+    cp_df_base.append(cp_dict)
 
     best_dict = {'tokenizer': tokenizer}
-    cp_df = pd.DataFrame(cp_dict)
+    cp_df = pd.DataFrame(cp_df_base)
     for fold, grp_df in cp_df.groupby('fold'):
         best_row = grp_df.sort_values('val_metric').iloc[-1]
         best_dict[fold] = torch.load(best_row['checkpoint'])['model_state_dict']
@@ -169,4 +172,4 @@ def save_and_clean_for_prediction(cp_dir, tokenizer):
 
 
 if __name__ == '__main__':
-    save_and_clean_for_prediction('../mnt/checkpoints/e001', None)
+    save_and_clean_for_prediction('../mnt/checkpoints/e002', None)
