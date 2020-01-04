@@ -28,7 +28,7 @@ MNT_DIR = '../mnt'
 DEVICE = 'cuda'
 PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 10
-MAX_EPOCH = 10
+MAX_EPOCH = 6
 
 
 def train_one_epoch(model, fobj, optimizer, loader):
@@ -205,9 +205,10 @@ def main(args, logger):
                 epoch,
                 val_loss,
                 val_metric)
+        del model
         send_line_notification(f'finished fold {fold}')
     sel_log('now saving best checkpoints...', logger)
-    save_and_clean_for_prediction(f'{MNT_DIR}/checkpoints', val_dataset.tokernizer)
+    save_and_clean_for_prediction(f'{MNT_DIR}/checkpoints', val_dataset.tokenizer)
 
 
 if __name__ == '__main__':

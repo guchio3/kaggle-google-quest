@@ -152,11 +152,11 @@ def save_and_clean_for_prediction(cp_dir, tokenizer):
         cp_dict = {}
         cp_dict['checkpoint'] = checkpoint
         splitted_checkpoint = checkpoint.split('/')[-1].split('_')
-        cp_dict['fold'] = splitted_checkpoint[1]
-        cp_dict['epoch'] = splitted_checkpoint[3]
-        cp_dict['val_loss'] = splitted_checkpoint[4]
-        cp_dict['val_metric'] = splitted_checkpoint[5]
-    cp_df_base.append(cp_dict)
+        cp_dict['fold'] = int(splitted_checkpoint[1])
+        cp_dict['epoch'] = int(splitted_checkpoint[3])
+        cp_dict['val_loss'] = float(splitted_checkpoint[4])
+        cp_dict['val_metric'] = float(splitted_checkpoint[5])
+        cp_df_base.append(cp_dict)
 
     best_dict = {'tokenizer': tokenizer}
     cp_df = pd.DataFrame(cp_df_base)
@@ -164,11 +164,11 @@ def save_and_clean_for_prediction(cp_dir, tokenizer):
         best_row = grp_df.sort_values('val_metric').iloc[-1]
         best_dict[fold] = torch.load(best_row['checkpoint'])['model_state_dict']
         send_line_notification(f'fold: {fold} -- val_metric: {best_row["val_metric"]:.4f}')
-    torch.save(best_dict, f'{cp_dir}/best_dict.pth')
-
-    # clean dir
-    for checkpoint in checkpoints:
-        os.remove(checkpoint)
+#    torch.save(best_dict, f'{cp_dir}/best_dict.pth')
+#
+#    # clean dir
+#    for checkpoint in checkpoints:
+#        os.remove(checkpoint)
 
 
 if __name__ == '__main__':
