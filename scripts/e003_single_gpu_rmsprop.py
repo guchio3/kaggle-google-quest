@@ -23,12 +23,12 @@ from utils import (dec_timer, load_checkpoint, logInit, parse_args,
                    save_and_clean_for_prediction, save_checkpoint, sel_log,
                    send_line_notification)
 
-EXP_ID = 'e002'
+EXP_ID = 'e003'
 MNT_DIR = '../mnt'
 DEVICE = 'cuda'
 PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 10
-MAX_EPOCH = 6
+MAX_EPOCH = 10
 
 
 def train_one_epoch(model, fobj, optimizer, loader):
@@ -167,9 +167,13 @@ def main(args, logger):
         model = BertModelForBinaryMultiLabelClassifier(num_labels=30,
                                                        pretrained_model_name_or_path=PRETRAIN
                                                        ).to(DEVICE)
-        optimizer = optim.Adam(model.parameters(), lr=3e-5)
+        optimizer = optim.RMSprop(
+            model.parameters(),
+            lr=3e-6,
+            momentum=0.9,
+            alpha=0.95)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
+            optimizer, T_max=MAX_EPOCH, eta_min=1e-6)
 
         # load checkpoint model, optim, scheduler
         if args.checkpoint and fold == loaded_fold:
@@ -205,10 +209,12 @@ def main(args, logger):
                 epoch,
                 val_loss,
                 val_metric)
-        del model
+        del model, trn_loss, val_loss, val_metric, val_y_preds, val_y_trues, val_qa_ids
         send_line_notification(f'finished fold {fold}')
     sel_log('now saving best checkpoints...', logger)
-    save_and_clean_for_prediction(f'{MNT_DIR}/checkpoints/e002/', val_dataset.tokenizer)
+    save_and_clean_for_prediction(
+        f'{MNT_DIR}/checkpoints/{EXP_ID}/',
+        val_dataset.tokenizer)
 
 
 if __name__ == '__main__':
