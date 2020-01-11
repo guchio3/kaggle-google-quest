@@ -40,3 +40,6 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
         outputs = (logits,) + outputs[2:]
 
         return outputs  # logits, (hidden_states), (attentions)
+
+    def resize_token_embeddings(self, token_num):
+        self.model.resize_token_embeddings(token_num)

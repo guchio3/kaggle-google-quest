@@ -17,6 +17,10 @@ RUN wget https://raw.githubusercontent.com/git/git/master/contrib/completion/git
 
 # install conda packages
 RUN conda install -y -c conda-forge pudb
+# too slow cuda, so re-install torch
+# https://github.com/pytorch/pytorch/issues/27807
+#RUN conda uninstall pytorch
+RUN conda install pytorch torchvision cudatoolkit=10.1 -c pytorch --force-reinstall
 
 # set jupyter notebook
 # jupyter vim key-bind settings

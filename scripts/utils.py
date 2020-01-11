@@ -6,7 +6,6 @@ from glob import glob
 from logging import DEBUG, FileHandler, Formatter, StreamHandler
 
 import pandas as pd
-
 import requests
 import torch
 
@@ -120,13 +119,13 @@ def load_checkpoint(cp_filename, model=None, optimizer=None, scheduler=None):
     return histories, current_fold, current_epoch
 
 
-def save_checkpoint(save_dir, exp_id, model, optimizer, scheduler,
+def save_checkpoint(save_dir, model, optimizer, scheduler,
                     histories, val_y_preds, val_y_trues, val_qa_ids,
                     current_fold, current_epoch, val_loss, val_metric):
-    if not os.path.exists(f'{save_dir}/{exp_id}'):
-        os.makedirs(f'../mnt/checkpoints/{exp_id}')
+    if not os.path.exists(f'{save_dir}'):
+        os.makedirs(f'{save_dir}')
     # pth means pytorch
-    cp_filename = f'{save_dir}/{exp_id}/' \
+    cp_filename = f'{save_dir}/' \
                   f'fold_{current_fold}_epoch_{current_epoch}' \
                   f'_{val_loss:.5f}_{val_metric:.5f}_checkpoint.pth'
     cp_dict = {
@@ -145,7 +144,7 @@ def save_checkpoint(save_dir, exp_id, model, optimizer, scheduler,
 
 
 def save_and_clean_for_prediction(cp_dir, tokenizer):
-    checkpoints = glob(f'{cp_dir}/*')
+    checkpoints = glob(f'{cp_dir}/*.pth')
 
     cp_df_base = []
     for checkpoint in checkpoints:
@@ -158,14 +157,21 @@ def save_and_clean_for_prediction(cp_dir, tokenizer):
         cp_dict['val_metric'] = float(splitted_checkpoint[5])
         cp_df_base.append(cp_dict)
 
-    best_dict = {'tokenizer': tokenizer}
     cp_df = pd.DataFrame(cp_df_base)
+    assert cp_df.fold.nunique() == 1
     for fold, grp_df in cp_df.groupby('fold'):
-        best_row = grp_df.sort_values('val_metric').iloc[-1]
-        best_dict[fold] = torch.load(best_row['checkpoint'])['model_state_dict']
-        send_line_notification(f'fold: {fold} -- val_metric: {best_row["val_metric"]:.4f}')
-#    torch.save(best_dict, f'{cp_dir}/best_dict.pth')
-#
+        for i, row in list(grp_df.sort_values('val_metric', ascending=False)
+                           .reset_index(drop=True)
+                           .iterrows()):
+            if i == 0:
+                best_row = row
+            else:
+                # rm w/o best row
+                os.remove(row['checkpoint'])
+        tokenizer.save_pretrained(cp_dir)
+        send_line_notification(
+            f'fold: {fold} -- val_metric: {best_row["val_metric"]:.4f}')
+
 #    # clean dir
 #    for checkpoint in checkpoints:
 #        os.remove(checkpoint)

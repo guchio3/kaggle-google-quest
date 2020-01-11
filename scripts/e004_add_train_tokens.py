@@ -1,3 +1,4 @@
+import itertools
 import os
 import sys
 from logging import getLogger
@@ -23,12 +24,14 @@ from utils import (dec_timer, load_checkpoint, logInit, parse_args,
                    save_and_clean_for_prediction, save_checkpoint, sel_log,
                    send_line_notification)
 
-EXP_ID = 'e003'
+EXP_ID = 'e004'
 MNT_DIR = '../mnt'
 DEVICE = 'cuda'
-PRETRAIN = 'bert-base-uncased'
+#PRETRAIN = 'bert-base-uncased'
+MODEL_PRETRAIN = '../mnt/pretrained/uncased_L-12_H-768_A-12/'
+TOKENIZER_PRETRAIN = '../mnt/pretrained/uncased_L-12_H-768_A-12/'
 BATCH_SIZE = 10
-MAX_EPOCH = 10
+MAX_EPOCH = 6
 
 
 def train_one_epoch(model, fobj, optimizer, loader):
@@ -93,7 +96,7 @@ def test(model, loader, tta=False):
 
             running_loss += loss
 
-            y_preds.append(nn.functional.sigmoid(logits))
+            y_preds.append(torch.sigmoid(logits))
             y_trues.append(labels)
             qa_ids.append(qa_id)
 
@@ -128,18 +131,27 @@ def main(args, logger):
     for fold, (trn_idx, val_idx) in enumerate(gkf):
         if fold < loaded_fold:
             continue
-        trn_qa_ids = trn_df.iloc[trn_idx].qa_id
-        val_qa_ids = trn_df.iloc[val_idx].qa_id
+        fold_trn_df = trn_df.iloc[trn_idx]
+        fold_val_df = trn_df.iloc[val_idx]
         if args.debug:
-            trn_qa_ids = trn_qa_ids.sample(300, random_state=71)
-            val_qa_ids = val_qa_ids.sample(300, random_state=71)
+            fold_trn_df = fold_trn_df.sample(100, random_state=71)
+            fold_val_df = fold_val_df.sample(100, random_state=71)
+        temp = pd.Series(list(itertools.chain.from_iterable(
+            fold_trn_df.question_title.apply(lambda x: x.split(' ')) +
+            fold_trn_df.question_body.apply(lambda x: x.split(' ')) +
+            fold_trn_df.answer.apply(lambda x: x.split(' '))
+        ))).value_counts()
+        tokens = temp[temp >= 10].index.tolist()
+        tokens = []
 
         trn_dataset = QUESTDataset(
-            mode='train',
-            qa_ids=trn_qa_ids,
-            augment=[],
-            pretrained_model_name_or_path=PRETRAIN,
-            data_path=f'{MNT_DIR}/inputs/origin/')
+                df=fold_trn_df,
+                mode='train',
+                tokens=tokens,
+                augment=[],
+                pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
+            )
+        # update token
         trn_sampler = RandomSampler(data_source=trn_dataset)
         trn_loader = DataLoader(trn_dataset,
                                 batch_size=BATCH_SIZE,
@@ -149,11 +161,12 @@ def main(args, logger):
                                 drop_last=True,
                                 pin_memory=True)
         val_dataset = QUESTDataset(
-            mode='valid',
-            qa_ids=val_qa_ids,
-            augment=[],
-            pretrained_model_name_or_path='bert-base-uncased',
-            data_path=f'{MNT_DIR}/inputs/origin/')
+                df=fold_val_df,
+                mode='valid',
+                tokens=tokens,
+                augment=[],
+                pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
+            )
         val_sampler = RandomSampler(data_source=val_dataset)
         val_loader = DataLoader(val_dataset,
                                 batch_size=BATCH_SIZE,
@@ -165,21 +178,19 @@ def main(args, logger):
 
         fobj = soft_binary_cross_entropy
         model = BertModelForBinaryMultiLabelClassifier(num_labels=30,
-                                                       pretrained_model_name_or_path=PRETRAIN
+                                                       pretrained_model_name_or_path=MODEL_PRETRAIN
                                                        ).to(DEVICE)
-        optimizer = optim.RMSprop(
-            model.parameters(),
-            lr=3e-6,
-            momentum=0.9,
-            alpha=0.95)
+        model.resize_token_embeddings(len(trn_dataset.tokenizer))
+        optimizer = optim.Adam(model.parameters(), lr=3e-5)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=MAX_EPOCH, eta_min=1e-6)
+            optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
 
         # load checkpoint model, optim, scheduler
         if args.checkpoint and fold == loaded_fold:
             load_checkpoint(args.checkpoint, model, optimizer, scheduler)
 
         for epoch in tqdm(list(range(MAX_EPOCH))):
+            model = model.to(DEVICE)
             if fold <= loaded_fold and epoch <= loaded_epoch:
                 continue
             trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader)
@@ -191,13 +202,14 @@ def main(args, logger):
             histories['val_loss'].append(val_loss)
             histories['val_metric'].append(val_metric)
             sel_log(
-                f'{trn_loss.detach().to("cpu").numpy()} -- '
-                f'{val_loss.detach().to("cpu").numpy()} -- '
-                f'{val_metric}',
+                    f'epoch : {epoch} -- fold : {fold} -- '
+                    f'trn_loss : {float(trn_loss.detach().to("cpu").numpy()):.4f} -- '
+                    f'val_loss : {float(val_loss.detach().to("cpu").numpy()):.4f} -- '
+                    f'val_metric : {float(val_metric):.4f}',
                 logger)
+            model = model.to('cpu')
             save_checkpoint(
-                f'{MNT_DIR}/checkpoints',
-                EXP_ID,
+                f'{MNT_DIR}/checkpoints/{EXP_ID}/{fold}',
                 model,
                 optimizer,
                 scheduler,
@@ -209,13 +221,11 @@ def main(args, logger):
                 epoch,
                 val_loss,
                 val_metric)
-        send_line_notification(f'finished fold {fold}')
+        save_and_clean_for_prediction(
+            f'{MNT_DIR}/checkpoints/{EXP_ID}/{fold}',
+            trn_dataset.tokenizer)
+        del model
     sel_log('now saving best checkpoints...', logger)
-    save_and_clean_for_prediction(
-            f'{MNT_DIR}/checkpoints/{EXP_ID}/',
-            model,
-            val_dataset.tokenizer
-        )
 
 
 if __name__ == '__main__':

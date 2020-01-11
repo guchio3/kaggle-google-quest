@@ -11,3 +11,9 @@
          - train : ``
          - predict : ``
      - notebooks       : `docker-compose run --service-ports jn`
+
+
+### install packages into kaggle notebook
+ 1. pip download -d ${SOME_DIR_NAME} ${PACKAGE_NAME} (on docker env)
+ 1. kaggle d init; vi dataset-metadata.json; kaggle d create (or version)
+ 1. (on kaggle notebook) !pip install --no-deps /kaggle/input/${YOUR_DATASET_NAME}/*
