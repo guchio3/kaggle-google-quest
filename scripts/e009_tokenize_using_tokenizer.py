@@ -3,6 +3,7 @@ import os
 import sys
 from logging import getLogger
 from math import floor, ceil
+import random
 
 import numpy as np
 import pandas as pd
@@ -12,6 +13,7 @@ from matplotlib import pyplot as plt
 from scipy.stats import spearmanr
 from sklearn.model_selection import GroupKFold
 from torch import nn, optim
+from torch.nn import BCEWithLogitsLoss
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
@@ -22,12 +24,24 @@ from utils import (dec_timer, load_checkpoint, logInit, parse_args,
                    send_line_notification)
 
 EXP_ID = os.path.basename(__file__).split('_')[0]
-MNT_DIR = '../mnt'
+MNT_DIR = './mnt'
 DEVICE = 'cuda'
 MODEL_PRETRAIN = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 10
 MAX_EPOCH = 6
+
+
+def seed_everything(seed=71):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+
+
+seed_everything()
 
 
 # --- dataset ---
@@ -61,11 +75,11 @@ class QUESTDataset(Dataset):
 
         tokens = [token.encode('ascii', 'replace').decode()
                   for token in tokens if token != '']
-        # added_num = self.tokenizer.add_tokens(tokens)
-        #if logger:
-        #    logger.info(f'additional_tokens : {added_num}')
-        #else:
-        #    print(f'additional_tokens : {added_num}')
+        added_num = self.tokenizer.add_tokens(tokens)
+        if logger:
+            logger.info(f'additional_tokens : {added_num}')
+        else:
+            print(f'additional_tokens : {added_num}')
         res = self._preprocess_texts(df)
         self.prep_df = df.merge(pd.DataFrame(res), on='qa_id', how='left')
 
@@ -121,14 +135,21 @@ class QUESTDataset(Dataset):
 
     def __preprocess_text_row(self, row):
         qa_id = row.qa_id
-        title = self.tokenizer.tokenize(row.question_title)
-        body = self.tokenizer.tokenize(row.question_body)
-        answer = self.tokenizer.tokenize(row.answer.casefold())
+#        title = self.tokenizer.tokenize(row.question_title)
+#        body = self.tokenizer.tokenize(row.question_body)
+#        answer = self.tokenizer.tokenize(row.answer.casefold())
+#        title = self.tokenizer.tokenize(row.question_title)
+#        body = self.tokenizer.tokenize(row.question_body)
+#        answer = self.tokenizer.tokenize(row.answer)
+        title = row.question_title.casefold()
+        body = row.question_body.casefold()
+        answer = row.answer.casefold()
         category = row.category
 
-        # title, body, answer = self._trim_input(title, body, answer)
+        title, body, answer = self._trim_input(title, body, answer)
 
-        title_and_body = title + [self.TBSEP] + body
+#        title_and_body = title + [self.TBSEP] + body
+        title_and_body = title + f' {self.TBSEP} ' + body
 
         encoded_texts_dict = self.tokenizer.encode_plus(
             text=title_and_body,
@@ -394,7 +415,7 @@ def main(args, logger):
                                 drop_last=False,
                                 pin_memory=True)
 
-        fobj = soft_binary_cross_entropy
+        fobj = BCEWithLogitsLoss()
         model = BertModelForBinaryMultiLabelClassifier(num_labels=30,
                                                        pretrained_model_name_or_path=MODEL_PRETRAIN,
                                                        )

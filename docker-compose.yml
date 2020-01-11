@@ -4,7 +4,6 @@ services:
         build: .
         volumes:
             - $PWD:/root/workspace
-            - $HOME/mnt:/root/mnt
         working_dir: /root/workspace
         runtime: nvidia
         ipc: host
@@ -16,7 +15,6 @@ services:
         build: .
         volumes:
             - $PWD:/root/workspace
-            - $HOME/mnt:/root/mnt
         working_dir: /root/workspace
         runtime: nvidia
         ipc: host
@@ -28,7 +26,6 @@ services:
         build: .
         volumes:
             - $PWD:/root/workspace
-            - $HOME/mnt:/root/mnt
         working_dir: /root/workspace/notebooks
         runtime: nvidia
         ipc: host
