@@ -50,7 +50,7 @@ class QUESTDataset(Dataset):
         }
 
         if mode == "test":
-            self.labels = pd.DataFrame([[-1] * 30] * len(df.qa_id))
+            self.labels = pd.DataFrame([[-1] * 30] * len(df))
         else:  # train or valid
             self.labels = df.iloc[:, 11:]
 
@@ -128,7 +128,7 @@ class QUESTDataset(Dataset):
             '()[]{}.,;:-?!\"\'\n').encode('ascii', 'replace').decode()
         category = row.category
 
-        title, body, answer = self._trim_input(title, body, answer)
+        # title, body, answer = self._trim_input(title, body, answer)
 
         encoded_texts_dict = self.tokenizer.encode_plus(
             text=title + f' {self.TBSEP} ' + body,
