@@ -120,12 +120,12 @@ class QUESTDataset(Dataset):
 
     def __preprocess_text_row(self, row):
         qa_id = row.qa_id
-        title = row.question_title.casefold().strip().strip(
-            '()[]{}.,;:-?!\"\'\n').encode('ascii', 'replace').decode()
-        body = row.question_body.casefold().strip().strip(
-            '()[]{}.,;:-?!\"\'\n').encode('ascii', 'replace').decode()
-        answer = row.answer.casefold().strip().strip(
-            '()[]{}.,;:-?!\"\'\n').encode('ascii', 'replace').decode()
+        title = row.question_title#.casefold().strip().strip(
+            #'()[]{}.,;:-?!\"\'\n').encode('ascii', 'replace').decode()
+        body = row.question_body#.casefold().strip().strip(
+            #'()[]{}.,;:-?!\"\'\n').encode('ascii', 'replace').decode()
+        answer = row.answer#.casefold().strip().strip(
+            #'()[]{}.,;:-?!\"\'\n').encode('ascii', 'replace').decode()
         category = row.category
 
         # title, body, answer = self._trim_input(title, body, answer)
