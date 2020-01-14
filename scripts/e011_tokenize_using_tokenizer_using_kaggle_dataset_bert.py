@@ -1,9 +1,9 @@
 import itertools
 import os
+import random
 import sys
 from logging import getLogger
-from math import floor, ceil
-import random
+from math import ceil, floor
 
 import numpy as np
 import pandas as pd
@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
 
-from transformers import BertForMaskedLM, BertModel, BertTokenizer
+from transformers import BertConfig, BertForMaskedLM, BertModel, BertTokenizer
 from utils import (dec_timer, load_checkpoint, logInit, parse_args,
                    save_and_clean_for_prediction, save_checkpoint, sel_log,
                    send_line_notification)
@@ -26,8 +26,9 @@ from utils import (dec_timer, load_checkpoint, logInit, parse_args,
 EXP_ID = os.path.basename(__file__).split('_')[0]
 MNT_DIR = './mnt'
 DEVICE = 'cuda'
-MODEL_PRETRAIN = 'bert-base-uncased'
-TOKENIZER_PRETRAIN = 'bert-base-uncased'
+MODEL_PRETRAIN = '../mnt/datasets/pytorch_bert/uncased_L-12_H-768_A-12/uncased_L-12_H-768_A-12/'
+MODEL_CONFIG = '../mnt/datasets/pytorch_bert/uncased_L-12_H-768_A-12/uncased_L-12_H-768_A-12/bert_config.json'
+TOKENIZER_PRETRAIN = '../mnt/datasets/pytorch_bert/uncased_L-12_H-768_A-12/uncased_L-12_H-768_A-12/vocab.txt'
 BATCH_SIZE = 10
 MAX_EPOCH = 6
 
@@ -69,7 +70,7 @@ class QUESTDataset(Dataset):
             self.labels = df.iloc[:, 11:]
 
         self.tokenizer = BertTokenizer.from_pretrained(
-            pretrained_model_name_or_path)
+            pretrained_model_name_or_path, do_lower_case=True)
         self.tokenizer.add_special_tokens(
             {'additional_special_tokens': [self.TBSEP]})
 
@@ -179,14 +180,19 @@ class QUESTDataset(Dataset):
 
 # --- model ---
 class BertModelForBinaryMultiLabelClassifier(nn.Module):
-    def __init__(self, num_labels,
+    def __init__(self, num_labels, bert_model_config,
                  pretrained_model_name_or_path=None, cat_num=0):
         super(BertModelForBinaryMultiLabelClassifier, self).__init__()
+
         if pretrained_model_name_or_path:
-            self.model = BertModel.from_pretrained(
+            self.bert = BertModel.from_pretrained(
                 pretrained_model_name_or_path)
         else:
             raise NotImplementedError
+
+        bert_config = BertConfig.from_json_file(bert_model_config)
+        bert_config.num_labels = num_labels
+
         self.num_labels = num_labels
         if cat_num > 0:
             self.catembedding = nn.Embedding(cat_num, 768)
@@ -197,7 +203,7 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             self.catactivateOut = nn.ReLU()
             self.dropout = nn.Dropout(0.2)
             self.classifier = nn.Linear(
-                self.model.pooler.dense.out_features + cat_num // 2 + 1, num_labels)
+                self.bert.pooler.dense.out_features + cat_num // 2 + 1, num_labels)
         else:
             self.catembedding = None
             self.catdropout = None
@@ -206,7 +212,7 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             self.catactivateOut = None
             self.dropout = nn.Dropout(0.2)
             self.classifier = nn.Linear(
-                self.model.pooler.dense.out_features, num_labels)
+                self.bert.pooler.dense.out_features, num_labels)
         self.add_module('fc_output', self.classifier)
 
     def forward(self, input_ids=None, input_cats=None, labels=None, attention_mask=None,
@@ -217,14 +223,14 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             encoder_hidden_states = self.catembedding(input_cats)
             encoder_hidden_states = self.catdropout(encoder_hidden_states)
             encoder_hidden_states = self.catactivate(encoder_hidden_states)
-        outputs = self.model(input_ids,
-                             attention_mask=attention_mask,
-                             token_type_ids=token_type_ids,
-                             position_ids=position_ids,
-                             head_mask=head_mask,
-                             inputs_embeds=inputs_embeds,
-                             encoder_hidden_states=encoder_hidden_states,
-                             encoder_attention_mask=encoder_attention_mask)
+        outputs = self.bert(input_ids,
+                            attention_mask=attention_mask,
+                            token_type_ids=token_type_ids,
+                            position_ids=position_ids,
+                            head_mask=head_mask,
+                            inputs_embeds=inputs_embeds,
+                            encoder_hidden_states=encoder_hidden_states,
+                            encoder_attention_mask=encoder_attention_mask)
         # pooled_output = outputs[1]
         pooled_output = torch.mean(outputs[0], dim=1)
         if self.catembeddingOut:
@@ -241,16 +247,10 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
         return outputs  # logits, (hidden_states), (attentions)
 
     def resize_token_embeddings(self, token_num):
-        self.model.resize_token_embeddings(token_num)
+        self.bert.resize_token_embeddings(token_num)
 
 
 # --- metrics ---
-def soft_binary_cross_entropy(pred, soft_targets):
-    L = -torch.sum((soft_targets * torch.log(nn.functional.sigmoid(pred)) +
-                    (1. - soft_targets) * torch.log(nn.functional.sigmoid(1. - pred))), 1)
-    return torch.mean(L)
-
-
 def compute_spearmanr(trues, preds):
     rhos = []
     for col_trues, col_pred in zip(trues.T, preds.T):
@@ -282,13 +282,13 @@ def train_one_epoch(model, fobj, optimizer, loader):
         # forward
         outputs = model(
             input_ids=input_ids,
-#            input_cats=cat_labels,
+            #            input_cats=cat_labels,
             labels=labels,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
-#            position_ids=position_ids
+            #            position_ids=position_ids
         )
-        loss = soft_binary_cross_entropy(outputs[0], labels)
+        loss = fobj(outputs[0], labels)
 
         # backword and update
         optimizer.zero_grad()
@@ -304,7 +304,7 @@ def train_one_epoch(model, fobj, optimizer, loader):
     return loss_mean
 
 
-def test(model, loader, tta=False):
+def test(model, fobj, loader, tta=False):
     model.eval()
 
     with torch.no_grad():
@@ -324,14 +324,14 @@ def test(model, loader, tta=False):
             # forward
             outputs = model(
                 input_ids=input_ids,
-#                input_cats=cat_labels,
+                #                input_cats=cat_labels,
                 labels=labels,
                 attention_mask=attention_mask,
                 token_type_ids=token_type_ids,
-#                position_ids=position_ids
+                #                position_ids=position_ids
             )
             logits = outputs[0]
-            loss = soft_binary_cross_entropy(logits, labels)
+            loss = fobj(logits, labels)
 
             running_loss += loss
 
@@ -434,7 +434,7 @@ def main(args, logger):
                 continue
             trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader)
             val_loss, val_metric, val_y_preds, val_y_trues, val_qa_ids = test(
-                model, val_loader)
+                model, fobj, val_loader)
 
             scheduler.step()
             histories['trn_loss'].append(trn_loss)

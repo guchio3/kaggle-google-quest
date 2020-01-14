@@ -1,9 +1,9 @@
 import itertools
 import os
+import random
 import sys
 from logging import getLogger
-from math import floor, ceil
-import random
+from math import ceil, floor
 
 import numpy as np
 import pandas as pd
@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
 
-from transformers import BertForMaskedLM, BertModel, BertTokenizer
+from transformers import BertConfig, BertForMaskedLM, BertModel, BertTokenizer
 from utils import (dec_timer, load_checkpoint, logInit, parse_args,
                    save_and_clean_for_prediction, save_checkpoint, sel_log,
                    send_line_notification)
@@ -27,6 +27,7 @@ EXP_ID = os.path.basename(__file__).split('_')[0]
 MNT_DIR = './mnt'
 DEVICE = 'cuda'
 MODEL_PRETRAIN = 'bert-base-uncased'
+# MODEL_CONFIG = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 10
 MAX_EPOCH = 6
@@ -56,11 +57,11 @@ class QUESTDataset(Dataset):
         self.MAX_SEQUENCE_LENGTH = MAX_SEQUENCE_LENGTH
         self.logger = logger
         self.cat_dict = {
-            'TECHNOLOGY': 0,
-            'STACKOVERFLOW': 1,
-            'CULTURE': 2,
-            'SCIENCE': 3,
-            'LIFE_ARTS': 4,
+            'CAT_TECHNOLOGY'.casefold(): 0,
+            'CAT_STACKOVERFLOW'.casefold(): 1,
+            'CAT_CULTURE'.casefold(): 2,
+            'CAT_SCIENCE'.casefold(): 3,
+            'CAT_LIFE_ARTS'.casefold(): 4,
         }
 
         if mode == "test":
@@ -69,9 +70,10 @@ class QUESTDataset(Dataset):
             self.labels = df.iloc[:, 11:]
 
         self.tokenizer = BertTokenizer.from_pretrained(
-            pretrained_model_name_or_path)
-        self.tokenizer.add_special_tokens(
-            {'additional_special_tokens': [self.TBSEP]})
+            pretrained_model_name_or_path, do_lower_case=True)
+        # self.tokenizer.add_special_tokens(
+        #     {'additional_special_tokens': [self.TBSEP]})
+        self.tokenizer.add_tokens([self.TBSEP])
 
         tokens = [token.encode('ascii', 'replace').decode()
                   for token in tokens if token != '']
@@ -144,12 +146,16 @@ class QUESTDataset(Dataset):
 #        title = row.question_title.casefold()
 #        body = row.question_body.casefold()
 #        answer = row.answer.casefold()
-        category = row.category
+#        category = row.category
+        category = ('CAT_' + row.category).casefold()
+
+        # category を text として入れてしまう !!!
+        title = [category] + title
 
         title, body, answer = self._trim_input(title, body, answer)
 
         title_and_body = title + [self.TBSEP] + body
-#        title_and_body = title + f' {self.TBSEP} ' + body
+        # title_and_body = title + f' {self.TBSEP} ' + body
 
         encoded_texts_dict = self.tokenizer.encode_plus(
             text=title_and_body,
@@ -245,12 +251,6 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
 
 
 # --- metrics ---
-def soft_binary_cross_entropy(pred, soft_targets):
-    L = -torch.sum((soft_targets * torch.log(nn.functional.sigmoid(pred)) +
-                    (1. - soft_targets) * torch.log(nn.functional.sigmoid(1. - pred))), 1)
-    return torch.mean(L)
-
-
 def compute_spearmanr(trues, preds):
     rhos = []
     for col_trues, col_pred in zip(trues.T, preds.T):
@@ -275,20 +275,20 @@ def train_one_epoch(model, fobj, optimizer, loader):
         input_ids = input_ids.to(DEVICE)
         attention_mask = attention_mask.to(DEVICE)
         token_type_ids = token_type_ids.to(DEVICE)
-#        cat_labels = cat_labels.to(DEVICE)
+        # cat_labels = cat_labels.to(DEVICE)
         position_ids = position_ids.to(DEVICE)
         labels = labels.to(DEVICE)
 
         # forward
         outputs = model(
             input_ids=input_ids,
-#            input_cats=cat_labels,
+            # input_cats=cat_labels,
             labels=labels,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
-#            position_ids=position_ids
+            #            position_ids=position_ids
         )
-        loss = soft_binary_cross_entropy(outputs[0], labels)
+        loss = fobj(outputs[0], labels)
 
         # backword and update
         optimizer.zero_grad()
@@ -304,7 +304,7 @@ def train_one_epoch(model, fobj, optimizer, loader):
     return loss_mean
 
 
-def test(model, loader, tta=False):
+def test(model, fobj, loader, tta=False):
     model.eval()
 
     with torch.no_grad():
@@ -317,21 +317,21 @@ def test(model, loader, tta=False):
             input_ids = input_ids.to(DEVICE)
             attention_mask = attention_mask.to(DEVICE)
             token_type_ids = token_type_ids.to(DEVICE)
-#            cat_labels = cat_labels.to(DEVICE)
+            # cat_labels = cat_labels.to(DEVICE)
             position_ids = position_ids.to(DEVICE)
             labels = labels.to(DEVICE)
 
             # forward
             outputs = model(
                 input_ids=input_ids,
-#                input_cats=cat_labels,
+                # input_cats=cat_labels,
                 labels=labels,
                 attention_mask=attention_mask,
                 token_type_ids=token_type_ids,
-#                position_ids=position_ids
+                #                position_ids=position_ids
             )
             logits = outputs[0]
-            loss = soft_binary_cross_entropy(logits, labels)
+            loss = fobj(logits, labels)
 
             running_loss += loss
 
@@ -381,7 +381,14 @@ def main(args, logger):
             fold_trn_df.answer.apply(lambda x: x.split(' '))
         ))).value_counts()
         tokens = temp[temp >= 10].index.tolist()
-        tokens = []
+        # tokens = []
+        tokens = [
+                'CAT_TECHNOLOGY'.casefold(),
+                'CAT_STACKOVERFLOW'.casefold(),
+                'CAT_CULTURE'.casefold(),
+                'CAT_SCIENCE'.casefold(),
+                'CAT_LIFE_ARTS'.casefold(),
+                ]
 
         trn_dataset = QUESTDataset(
             df=fold_trn_df,
@@ -418,8 +425,9 @@ def main(args, logger):
         fobj = BCEWithLogitsLoss()
         model = BertModelForBinaryMultiLabelClassifier(num_labels=30,
                                                        pretrained_model_name_or_path=MODEL_PRETRAIN,
+#                                                       cat_num=5
                                                        )
-        # model.resize_token_embeddings(len(trn_dataset.tokenizer))
+        model.resize_token_embeddings(len(trn_dataset.tokenizer))
         optimizer = optim.Adam(model.parameters(), lr=3e-5)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
@@ -434,7 +442,7 @@ def main(args, logger):
                 continue
             trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader)
             val_loss, val_metric, val_y_preds, val_y_trues, val_qa_ids = test(
-                model, val_loader)
+                model, fobj, val_loader)
 
             scheduler.step()
             histories['trn_loss'].append(trn_loss)

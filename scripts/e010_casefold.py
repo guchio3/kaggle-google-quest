@@ -138,18 +138,18 @@ class QUESTDataset(Dataset):
 #        title = self.tokenizer.tokenize(row.question_title)
 #        body = self.tokenizer.tokenize(row.question_body)
 #        answer = self.tokenizer.tokenize(row.answer.casefold())
-        title = self.tokenizer.tokenize(row.question_title)
-        body = self.tokenizer.tokenize(row.question_body)
-        answer = self.tokenizer.tokenize(row.answer)
-#        title = row.question_title.casefold()
-#        body = row.question_body.casefold()
-#        answer = row.answer.casefold()
+#        title = self.tokenizer.tokenize(row.question_title)
+#        body = self.tokenizer.tokenize(row.question_body)
+#        answer = self.tokenizer.tokenize(row.answer)
+        title = row.question_title.casefold()
+        body = row.question_body.casefold()
+        answer = row.answer.casefold()
         category = row.category
 
-        title, body, answer = self._trim_input(title, body, answer)
-
-        title_and_body = title + [self.TBSEP] + body
-#        title_and_body = title + f' {self.TBSEP} ' + body
+#        title, body, answer = self._trim_input(title, body, answer)
+#
+#        title_and_body = title + [self.TBSEP] + body
+        title_and_body = title + f' {self.TBSEP} ' + body
 
         encoded_texts_dict = self.tokenizer.encode_plus(
             text=title_and_body,
@@ -288,7 +288,7 @@ def train_one_epoch(model, fobj, optimizer, loader):
             token_type_ids=token_type_ids,
 #            position_ids=position_ids
         )
-        loss = soft_binary_cross_entropy(outputs[0], labels)
+        loss = fobj(outputs[0], labels)
 
         # backword and update
         optimizer.zero_grad()
@@ -432,6 +432,8 @@ def main(args, logger):
             model = model.to(DEVICE)
             if fold <= loaded_fold and epoch <= loaded_epoch:
                 continue
+            if epoch == 0:
+                logger.info(f'-------------------- start fold {fold}! --------------------')
             trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader)
             val_loss, val_metric, val_y_preds, val_y_trues, val_qa_ids = test(
                 model, val_loader)
@@ -441,7 +443,8 @@ def main(args, logger):
             histories['val_loss'].append(val_loss)
             histories['val_metric'].append(val_metric)
             sel_log(
-                f'epoch : {epoch} -- fold : {fold} -- '
+                f'fold : {fold} -- '
+                f'epoch : {epoch} -- '
                 f'trn_loss : {float(trn_loss.detach().to("cpu").numpy()):.4f} -- '
                 f'val_loss : {float(val_loss.detach().to("cpu").numpy()):.4f} -- '
                 f'val_metric : {float(val_metric):.4f}',
