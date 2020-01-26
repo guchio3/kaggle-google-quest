@@ -305,7 +305,7 @@ def compute_spearmanr(trues, preds):
                     0,
                     1e-7,
                     col_pred.shape[0])).correlation)
-    return np.mean(rhos)
+    return rhos
 
 
 def train_one_epoch(model, fobj, optimizer, loader):
@@ -532,7 +532,7 @@ def main(args, logger):
                 histories['val_metric_raws'][fold] = [val_metric_raws, ]
 
             logging_val_metric_raws = ''
-            for val_metric_raw in val_metric_raws.tolist():
+            for val_metric_raw in val_metric_raws:
                 logging_val_metric_raws += f'{float(val_metric_raw):.4f}, '
 
             sel_log(
@@ -573,7 +573,7 @@ def main(args, logger):
 
     fold_best_metrics_raws_mean = np.mean(fold_best_metrics_raws, axis=0)
     fold_raw_stats = ''
-    for metric_stats_raw in fold_best_metrics_raws_mean.tolist():
+    for metric_stats_raw in fold_best_metrics_raws_mean:
         fold_raw_stats += f'{float(metric_stats_raw):.4f}'
     sel_log(fold_raw_stats, logger)
     send_line_notification(fold_raw_stats)
