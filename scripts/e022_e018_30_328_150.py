@@ -102,7 +102,7 @@ class QUESTDataset(Dataset):
         idx_row = self.__preprocess_text_row(idx_row,
                                              t_max_len=30,
                                              q_max_len=328,
-                                             a_max_len=128)
+                                             a_max_len=150)
         input_ids = idx_row['input_ids'].squeeze()
         token_type_ids = idx_row['token_type_ids'].squeeze()
         attention_mask = idx_row['attention_mask'].squeeze()
