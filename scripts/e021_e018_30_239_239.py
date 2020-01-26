@@ -429,7 +429,7 @@ def main(args, logger):
                 histories["val_metric_raws"][fold][np.argmax(histories["val_metric"][fold])])
             continue
         sel_log(
-            f' --------------------------- start fold {fold} --------------------------- ')
+            f' --------------------------- start fold {fold} --------------------------- ', logger)
         fold_trn_df = trn_df.iloc[trn_idx]  # .query('is_original == 1')
         fold_trn_df = fold_trn_df.drop(
             ['is_original', 'question_body_le'], axis=1)
@@ -532,7 +532,7 @@ def main(args, logger):
                 histories['val_metric_raws'][fold] = [val_metric_raws, ]
 
             logging_val_metric_raws = ''
-            for val_metric_raw in val_metric_raws:
+            for val_metric_raw in val_metric_raws.tolist():
                 logging_val_metric_raws += f'{float(val_metric_raw):.4f}, '
 
             sel_log(
@@ -567,13 +567,13 @@ def main(args, logger):
     # calc training stats
     fold_best_metric_mean = np.mean(fold_best_metrics)
     fold_best_metric_std = np.std(fold_best_metrics)
-    fold_stats = f'{fold_best_metric_mean:.4f} +- {fold_best_metric_std:.4f}'
+    fold_stats = f'{EXP_ID} : {fold_best_metric_mean:.4f} +- {fold_best_metric_std:.4f}'
     sel_log(fold_stats, logger)
     send_line_notification(fold_stats)
 
     fold_best_metrics_raws_mean = np.mean(fold_best_metrics_raws, axis=0)
     fold_raw_stats = ''
-    for metric_stats_raw in fold_best_metrics_raws_mean:
+    for metric_stats_raw in fold_best_metrics_raws_mean.tolist():
         fold_raw_stats += f'{float(metric_stats_raw):.4f}'
     sel_log(fold_raw_stats, logger)
     send_line_notification(fold_raw_stats)
@@ -589,4 +589,5 @@ if __name__ == '__main__':
     logger = logInit(logger, f'{MNT_DIR}/logs/', log_file)
     sel_log(f'args: {sorted(vars(args).items())}', logger)
 
+    send_line_notification(f' ------------- start {EXP_ID} ------------- ')
     main(args, logger)
