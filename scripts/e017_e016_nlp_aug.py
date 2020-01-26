@@ -87,25 +87,25 @@ class QUESTDataset(Dataset):
         else:
             print(f'additional_tokens : {added_num}')
         # change online preprocess or off line preprocess
-        # self.original_df = df
-        res = self._preprocess_texts(df)
-        self.prep_df = df.merge(pd.DataFrame(res), on='qa_id', how='left')
+        self.original_df = df
+        # res = self._preprocess_texts(df)
+        # self.prep_df = df.merge(pd.DataFrame(res), on='qa_id', how='left')
 
     def __len__(self):
         return self.len
 
     def __getitem__(self, idx):
         # change online preprocess or off line preprocess
-        idx_row = self.prep_df.iloc[idx]
-        # idx_row = self.original_df.iloc[idx].copy()
+        # idx_row = self.prep_df.iloc[idx]
+        idx_row = self.original_df.iloc[idx].copy()
         # idx_row = self._augment(idx_row)
-        # idx_row = self.__preprocess_text_row(idx_row)
+        idx_row = self.__preprocess_text_row(idx_row)
         input_ids = idx_row['input_ids'].squeeze()
         token_type_ids = idx_row['token_type_ids'].squeeze()
         attention_mask = idx_row['attention_mask'].squeeze()
         qa_id = idx_row['qa_id'].squeeze()
-        cat_labels = idx_row['cat_label'].squeeze()
-        # cat_labels = -1
+        # cat_labels = idx_row['cat_label'].squeeze()
+        cat_labels = -1
         position_ids = torch.arange(self.MAX_SEQUENCE_LENGTH)
 
         labels = self.labels.iloc[idx].values
@@ -376,17 +376,19 @@ def test(model, fobj, loader, tta=False):
 
 
 def main(args, logger):
-    trn_df = pd.read_csv(f'{MNT_DIR}/inputs/origin/train.csv')
+    # trn_df = pd.read_csv(f'{MNT_DIR}/inputs/origin/train.csv')
+    trn_df = pd.read_pickle(f'{MNT_DIR}/inputs/nes_info/trn_df.pkl')
     trn_df['is_original'] = 1
-    aug_df = pd.read_pickle(f'{MNT_DIR}/inputs/nes_info/aug_train_1.pkl')
+    aug_df = pd.read_pickle(f'{MNT_DIR}/inputs/nes_info/ContextualWordEmbsAug_sub_df.pkl')
     aug_df['is_original'] = 0
 
-    trn_df = pd.concat([trn_df, aug_df], axis=0)
+    trn_df = pd.concat([trn_df, aug_df], axis=0).reset_index(drop=True)
 
     gkf = GroupKFold(
         n_splits=5).split(
         X=trn_df.question_body,
-        groups=trn_df.question_body)
+        groups=trn_df.question_body_le,
+    )
 
     histories = {
         'trn_loss': {},
@@ -400,11 +402,11 @@ def main(args, logger):
     for fold, (trn_idx, val_idx) in enumerate(gkf):
         if fold < loaded_fold:
             continue
-        fold_trn_df = trn_df.iloc[trn_idx]
-        fold_trn_df = fold_trn_df.drop('is_original', axis=1)
+        fold_trn_df = trn_df.iloc[trn_idx]# .query('is_original == 1')
+        fold_trn_df = fold_trn_df.drop(['is_original', 'question_body_le'], axis=1)
         # use only original row
         fold_val_df = trn_df.iloc[val_idx].query('is_original == 1')
-        fold_val_df = fold_val_df.drop('is_original', axis=1)
+        fold_val_df = fold_val_df.drop(['is_original', 'question_body_le'], axis=1)
         if args.debug:
             fold_trn_df = fold_trn_df.sample(100, random_state=71)
             fold_val_df = fold_val_df.sample(100, random_state=71)
@@ -513,8 +515,10 @@ def main(args, logger):
         save_and_clean_for_prediction(
             f'{MNT_DIR}/checkpoints/{EXP_ID}/{fold}',
             trn_dataset.tokenizer)
-        fold_stats = f'{np.mean(histories["val_metric"][{fold}]):.4f} ' \
-            '+- {np.std(histories["val_metric"][{fold}]):.4f}'
+        fold_metric = histories["val_metric"][fold]
+        fold_metric_mean = np.mean(fold_metric)
+        fold_metric_std = np.std(fold_metric)
+        fold_stats = f'{fold_metric_mean:.4f} +- {fold_metric_std:.4f}'
         sel_log(fold_stats, logger)
         send_line_notification(fold_stats)
         del model
