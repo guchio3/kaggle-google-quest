@@ -22,6 +22,9 @@ RUN conda install -y -c conda-forge pudb
 #RUN conda uninstall pytorch
 RUN conda install pytorch torchvision cudatoolkit=10.1 -c pytorch --force-reinstall
 
+# install pip packages
+RUN pip install nlpaug
+
 # set jupyter notebook
 # jupyter vim key-bind settings
 RUN pip install jupyter_contrib_nbextensions
