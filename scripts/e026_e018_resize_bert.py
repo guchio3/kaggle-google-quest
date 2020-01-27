@@ -33,7 +33,7 @@ DEVICE = 'cuda'
 MODEL_PRETRAIN = 'bert-base-uncased'
 # MODEL_CONFIG = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
-BATCH_SIZE = 16
+BATCH_SIZE = 8
 MAX_EPOCH = 6
 
 
