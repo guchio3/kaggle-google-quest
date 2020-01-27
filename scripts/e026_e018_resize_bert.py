@@ -33,8 +33,8 @@ DEVICE = 'cuda'
 MODEL_PRETRAIN = 'bert-base-uncased'
 # MODEL_CONFIG = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
-BATCH_SIZE = 8
-MAX_EPOCH = 6
+BATCH_SIZE = 10
+MAX_EPOCH = 8
 
 
 def seed_everything(seed=71):
