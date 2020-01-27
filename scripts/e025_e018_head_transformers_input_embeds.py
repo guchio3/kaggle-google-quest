@@ -274,6 +274,8 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             vocab_size=token_size,
             max_position_embeddings=MAX_SEQUENCE_LENGTH)
         self.input_embeddings = BertEmbeddings(input_model_config)
+        self.input_embeddings.load_state_dict(self.model.)
+        self.input_embeddings.position_embeddings = self._resize_embeddings(self.input_embeddings.position_embeddings, MAX_SEQUENCE_LENGTH)
         self.input_bert_layer = BertLayer(input_model_config)
 
         # use bertmodel as decoder
@@ -346,6 +348,21 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             for name, child in self.model.named_children():
                 for param in child.parameters():
                     param.requires_grad = True
+
+    def _resize_embeddings(self, old_embeddings, new_num_tokens):
+        old_num_tokens, old_embedding_dim = old_embeddings.weight.size()
+        if old_num_tokens == new_num_tokens:
+            return old_embeddings
+
+        # Build new embeddings
+        new_embeddings = nn.Embedding(new_num_tokens, old_embedding_dim)
+        new_embeddings.to(old_embeddings.weight.device)
+
+        # Copy word embeddings from the previous weights
+        num_tokens_to_copy = min(old_num_tokens, new_num_tokens)
+        new_embeddings.weight.data[:num_tokens_to_copy, :] = old_embeddings.weight.data[:num_tokens_to_copy, :]
+
+        return new_embeddings
 
 
 # --- metrics ---

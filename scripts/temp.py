@@ -33,7 +33,7 @@ DEVICE = 'cuda'
 MODEL_PRETRAIN = 'bert-base-uncased'
 # MODEL_CONFIG = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
-BATCH_SIZE = 8
+BATCH_SIZE = 10
 MAX_EPOCH = 6
 
 
@@ -53,21 +53,12 @@ seed_everything()
 class QUESTDataset(Dataset):
     def __init__(self, df, mode, tokens, augment,
                  pretrained_model_name_or_path, TBSEP='[TBSEP]',
-                 MAX_SEQUENCE_LENGTH=None, use_category=True, logger=None):
+                 MAX_SEQUENCE_LENGTH=512, use_category=True, logger=None):
         self.mode = mode
         self.augment = augment
         self.len = len(df)
         self.TBSEP = TBSEP
-        if MAX_SEQUENCE_LENGTH:
-            self.MAX_SEQUENCE_LENGTH = MAX_SEQUENCE_LENGTH
-        else:
-            raise NotImplementedError
-            # self.MAX_SEQUENCE_LENGTH = -1
-            # for i, row in self.prep_df.iterrows():
-            #     input_ids = row['input_ids'].squeeze()
-            #     if self.MAX_SEQUENCE_LENGTH < len(input_ids):
-            #         self.MAX_SEQUENCE_LENGTH = len(input_ids)
-            # sel_log(f'calculated seq_len: {self.MAX_SEQUENCE_LENGTH}', logger)
+        self.MAX_SEQUENCE_LENGTH = MAX_SEQUENCE_LENGTH
         self.use_category = use_category
         self.logger = logger
         self.cat_dict = {
@@ -108,18 +99,12 @@ class QUESTDataset(Dataset):
         # change online preprocess or off line preprocess
         # idx_row = self.prep_df.iloc[idx]
         idx_row = self.original_df.iloc[idx].copy()
-        idx_row_2 = self.original_df.iloc[idx].copy()
         # idx_row = self._augment(idx_row)
         idx_row = self.__preprocess_text_row(idx_row,
-                                             t_max_len=100,
-                                             q_max_len=700,
-                                             a_max_len=700)
-        idx_row_2 = self.__preprocess_text_row(idx_row_2,
-                                               t_max_len=30,
-                                               q_max_len=239,
-                                               a_max_len=239)
+                                             t_max_len=30,
+                                             q_max_len=428,
+                                             a_max_len=50)
         input_ids = idx_row['input_ids'].squeeze()
-        input_ids_2 = idx_row_2['input_ids'].squeeze()
         token_type_ids = idx_row['token_type_ids'].squeeze()
         attention_mask = idx_row['attention_mask'].squeeze()
         qa_id = idx_row['qa_id'].squeeze()
@@ -128,7 +113,7 @@ class QUESTDataset(Dataset):
         position_ids = torch.arange(self.MAX_SEQUENCE_LENGTH)
 
         labels = self.labels.iloc[idx].values
-        return qa_id, input_ids, input_ids_2, attention_mask, \
+        return qa_id, input_ids, attention_mask, \
             token_type_ids, cat_labels, position_ids, labels
 
     def _trim_input(self, title, question, answer,
@@ -156,10 +141,10 @@ class QUESTDataset(Dataset):
                 a_new_len = a_max_len
                 q_new_len = q_max_len
 
-            # if t_new_len + a_new_len + q_new_len + 4 != self.MAX_SEQUENCE_LENGTH:
-            #     raise ValueError("New sequence length should be %d, but is %d"
-            #                      % (self.MAX_SEQUENCE_LENGTH,
-            #                          (t_new_len + a_new_len + q_new_len + 4)))
+            if t_new_len + a_new_len + q_new_len + 4 != self.MAX_SEQUENCE_LENGTH:
+                raise ValueError("New sequence length should be %d, but is %d"
+                                 % (self.MAX_SEQUENCE_LENGTH,
+                                     (t_new_len + a_new_len + q_new_len + 4)))
             title = title[:t_new_len]
             question = question[:q_new_len]
             answer = answer[:a_new_len]
@@ -183,10 +168,10 @@ class QUESTDataset(Dataset):
         if self.use_category:
             title = [category] + title
 
-        title, body, answer = self._trim_input(title, body, answer,
-                                               t_max_len=t_max_len,
-                                               q_max_len=q_max_len,
-                                               a_max_len=a_max_len)
+        # title, body, answer = self._trim_input(title, body, answer,
+        #                                        t_max_len=t_max_len,
+        #                                        q_max_len=q_max_len,
+        #                                        a_max_len=a_max_len)
 
         title_and_body = title + [self.TBSEP] + body
         # title_and_body = title + f' {self.TBSEP} ' + body
@@ -216,28 +201,28 @@ class QUESTDataset(Dataset):
             res.append(self.__preprocess_text_row(row))
         return res
 
-    # def _augment(self, row):
-    #     if 'ins_ContextualWordEmbsAug' in self.augment:
-    #         aug = naw.ContextualWordEmbsAug(
-    #             model_path='bert-base-uncased', action="insert", device='cpu')
-    #         row['question_title'] = aug.augment(row['question_title'])
-    #         row['question_body'] = aug.augment(row['question_body'])
-    #         row['answer'] = aug.augment(row['answer'])
-    #     if 'sub_ContextualWordEmbsAug' in self.augment:
-    #         aug = naw.ContextualWordEmbsAug(
-    #             model_path='bert-base-uncased',
-    #             action="substitute",
-    #             device='cpu')
-    #         row['question_title'] = aug.augment(row['question_title'])
-    #         row['question_body'] = aug.augment(row['question_body'])
-    #         row['answer'] = aug.augment(row['answer'])
-    #     return row
+    def _augment(self, row):
+        if 'ins_ContextualWordEmbsAug' in self.augment:
+            aug = naw.ContextualWordEmbsAug(
+                model_path='bert-base-uncased', action="insert", device='cpu')
+            row['question_title'] = aug.augment(row['question_title'])
+            row['question_body'] = aug.augment(row['question_body'])
+            row['answer'] = aug.augment(row['answer'])
+        if 'sub_ContextualWordEmbsAug' in self.augment:
+            aug = naw.ContextualWordEmbsAug(
+                model_path='bert-base-uncased',
+                action="substitute",
+                device='cpu')
+            row['question_title'] = aug.augment(row['question_title'])
+            row['question_body'] = aug.augment(row['question_body'])
+            row['answer'] = aug.augment(row['answer'])
+        return row
 
 
 # --- model ---
 class BertModelForBinaryMultiLabelClassifier(nn.Module):
-    def __init__(self, num_labels, pretrained_model_name_or_path=None,
-                 cat_num=0, token_size=None, MAX_SEQUENCE_LENGTH=512):
+    def __init__(self, num_labels,
+                 pretrained_model_name_or_path=None, cat_num=0, token_size=None):
         super(BertModelForBinaryMultiLabelClassifier, self).__init__()
         if pretrained_model_name_or_path:
             self.model = BertModel.from_pretrained(
@@ -270,21 +255,22 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             self.model.resize_token_embeddings(token_size)
 
         # define input embedding and transformers
-        input_model_config = BertConfig(
-            vocab_size=token_size,
-            max_position_embeddings=MAX_SEQUENCE_LENGTH)
-        self.input_embeddings = BertEmbeddings(input_model_config)
-        self.input_bert_layer = BertLayer(input_model_config)
+        self.input_embeddings = BertEmbeddings(self.model.config)
+        self.input_embeddings.load_state_dict(
+            self.model.embeddings.state_dict())
+        self.input_bert_layer = BertLayer(self.model.config)
+        self.input_bert_layer.load_state_dict(
+            self.model.encoder.layer[0].state_dict())
 
         # use bertmodel as decoder
-        self.model.config.is_decoder = True
+        # self.model.config.is_decoder = True
 
         # add modules
         self.add_module('my_input_embeddings', self.input_embeddings)
         self.add_module('my_input_bert_layer', self.input_bert_layer)
         self.add_module('fc_output', self.classifier)
 
-    def forward(self, input_ids=None, input_ids_2=None, input_cats=None, labels=None, attention_mask=None,
+    def forward(self, input_ids=None, input_cats=None, labels=None, attention_mask=None,
                 token_type_ids=None, position_ids=None, head_mask=None,
                 inputs_embeds=None, encoder_hidden_states=None,
                 encoder_attention_mask=None):
@@ -297,24 +283,21 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             raise NotImplementedError
 
         embedding_output = self.input_embeddings(
-            input_ids=input_ids,
-            position_ids=position_ids,
-            token_type_ids=token_type_ids,
-            inputs_embeds=inputs_embeds)
+                input_ids=input_ids,
+                position_ids=position_ids,
+                token_type_ids=token_type_ids,
+                inputs_embeds=inputs_embeds)
         layer_output = self.input_bert_layer(embedding_output)
-        inputs_embeds = layer_output[0]  # fit to bertmodel
+        inputs_embeds = layer_output[0]
 
-        outputs = self.model(input_ids=input_ids_2[:, :512],
-                             attention_mask=None,
-                             # attention_mask=attention_mask[:, :512],
-                             token_type_ids=None,
-                             # token_type_ids=token_type_ids[:, :512],
-                             position_ids=None,
-                             head_mask=None,
-                             # inputs_embeds=inputs_embeds[:, :512, :],
-                             inputs_embeds=None,
-                             encoder_hidden_states=inputs_embeds,
-                             encoder_attention_mask=None)
+        outputs = self.model(input_ids=None,
+                             attention_mask=attention_mask,
+                             token_type_ids=token_type_ids,
+                             position_ids=position_ids,
+                             head_mask=head_mask,
+                             inputs_embeds=inputs_embeds,
+                             encoder_hidden_states=encoder_hidden_states,
+                             encoder_attention_mask=encoder_attention_mask)
         # pooled_output = outputs[1]
         pooled_output = torch.mean(outputs[0], dim=1)
         if self.catembeddingOut:
@@ -367,11 +350,10 @@ def train_one_epoch(model, fobj, optimizer, loader):
     model.train()
 
     running_loss = 0
-    for (qa_id, input_ids, input_ids_2, attention_mask,
+    for (qa_id, input_ids, attention_mask,
          token_type_ids, cat_labels, position_ids, labels) in tqdm(loader):
         # send them to DEVICE
         input_ids = input_ids.to(DEVICE)
-        input_ids_2 = input_ids_2.to(DEVICE)
         attention_mask = attention_mask.to(DEVICE)
         token_type_ids = token_type_ids.to(DEVICE)
         # cat_labels = cat_labels.to(DEVICE)
@@ -381,7 +363,6 @@ def train_one_epoch(model, fobj, optimizer, loader):
         # forward
         outputs = model(
             input_ids=input_ids,
-            input_ids_2=input_ids_2,
             # input_cats=cat_labels,
             labels=labels,
             attention_mask=attention_mask,
@@ -411,11 +392,10 @@ def test(model, fobj, loader, tta=False):
         y_preds, y_trues, qa_ids = [], [], []
 
         running_loss = 0
-        for (qa_id, input_ids, input_ids_2, attention_mask,
+        for (qa_id, input_ids, attention_mask,
              token_type_ids, cat_labels, position_ids, labels) in tqdm(loader):
             # send them to DEVICE
             input_ids = input_ids.to(DEVICE)
-            input_ids_2 = input_ids_2.to(DEVICE)
             attention_mask = attention_mask.to(DEVICE)
             token_type_ids = token_type_ids.to(DEVICE)
             # cat_labels = cat_labels.to(DEVICE)
@@ -425,7 +405,6 @@ def test(model, fobj, loader, tta=False):
             # forward
             outputs = model(
                 input_ids=input_ids,
-                input_ids_2=input_ids_2,
                 # input_cats=cat_labels,
                 labels=labels,
                 attention_mask=attention_mask,
@@ -479,17 +458,6 @@ def main(args, logger):
     if args.checkpoint:
         histories, loaded_fold, loaded_epoch = load_checkpoint(args.checkpoint)
 
-    # calc max_seq_len using quest dataset
-    # max_seq_len = QUESTDataset(
-    #     df=trn_df,
-    #     mode='train',
-    #     tokens=[],
-    #     augment=[],
-    #     pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
-    # ).MAX_SEQUENCE_LENGTH
-    # max_seq_len = 9458
-    max_seq_len = 1504
-
     fold_best_metrics = []
     fold_best_metrics_raws = []
     for fold, (trn_idx, val_idx) in enumerate(gkf):
@@ -531,7 +499,6 @@ def main(args, logger):
             tokens=tokens,
             augment=[],
             pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
-            MAX_SEQUENCE_LENGTH=max_seq_len,
         )
         # update token
         trn_sampler = RandomSampler(data_source=trn_dataset)
@@ -548,7 +515,6 @@ def main(args, logger):
             tokens=tokens,
             augment=[],
             pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
-            MAX_SEQUENCE_LENGTH=max_seq_len,
         )
         val_sampler = RandomSampler(data_source=val_dataset)
         val_loader = DataLoader(val_dataset,
@@ -563,9 +529,7 @@ def main(args, logger):
         model = BertModelForBinaryMultiLabelClassifier(num_labels=30,
                                                        pretrained_model_name_or_path=MODEL_PRETRAIN,
                                                        # cat_num=5,
-                                                       token_size=len(
-                                                           trn_dataset.tokenizer),
-                                                       MAX_SEQUENCE_LENGTH=max_seq_len,
+                                                       token_size=len(trn_dataset.tokenizer),
                                                        )
         optimizer = optim.Adam(model.parameters(), lr=3e-5)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(

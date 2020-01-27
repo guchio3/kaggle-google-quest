@@ -33,7 +33,7 @@ DEVICE = 'cuda'
 MODEL_PRETRAIN = 'bert-base-uncased'
 # MODEL_CONFIG = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
-BATCH_SIZE = 8
+BATCH_SIZE = 5
 MAX_EPOCH = 6
 
 
@@ -108,18 +108,12 @@ class QUESTDataset(Dataset):
         # change online preprocess or off line preprocess
         # idx_row = self.prep_df.iloc[idx]
         idx_row = self.original_df.iloc[idx].copy()
-        idx_row_2 = self.original_df.iloc[idx].copy()
         # idx_row = self._augment(idx_row)
         idx_row = self.__preprocess_text_row(idx_row,
-                                             t_max_len=100,
-                                             q_max_len=700,
-                                             a_max_len=700)
-        idx_row_2 = self.__preprocess_text_row(idx_row_2,
-                                               t_max_len=30,
-                                               q_max_len=239,
-                                               a_max_len=239)
+                                             t_max_len=30,
+                                             q_max_len=428,
+                                             a_max_len=50)
         input_ids = idx_row['input_ids'].squeeze()
-        input_ids_2 = idx_row_2['input_ids'].squeeze()
         token_type_ids = idx_row['token_type_ids'].squeeze()
         attention_mask = idx_row['attention_mask'].squeeze()
         qa_id = idx_row['qa_id'].squeeze()
@@ -128,7 +122,7 @@ class QUESTDataset(Dataset):
         position_ids = torch.arange(self.MAX_SEQUENCE_LENGTH)
 
         labels = self.labels.iloc[idx].values
-        return qa_id, input_ids, input_ids_2, attention_mask, \
+        return qa_id, input_ids, attention_mask, \
             token_type_ids, cat_labels, position_ids, labels
 
     def _trim_input(self, title, question, answer,
@@ -156,16 +150,16 @@ class QUESTDataset(Dataset):
                 a_new_len = a_max_len
                 q_new_len = q_max_len
 
-            # if t_new_len + a_new_len + q_new_len + 4 != self.MAX_SEQUENCE_LENGTH:
-            #     raise ValueError("New sequence length should be %d, but is %d"
-            #                      % (self.MAX_SEQUENCE_LENGTH,
-            #                          (t_new_len + a_new_len + q_new_len + 4)))
+            if t_new_len + a_new_len + q_new_len + 4 != self.MAX_SEQUENCE_LENGTH:
+                raise ValueError("New sequence length should be %d, but is %d"
+                                 % (self.MAX_SEQUENCE_LENGTH,
+                                     (t_new_len + a_new_len + q_new_len + 4)))
             title = title[:t_new_len]
             question = question[:q_new_len]
             answer = answer[:a_new_len]
         return title, question, answer
 
-    def __preprocess_text_row(self, row, t_max_len, q_max_len, a_max_len):
+    def __preprocess_text_row(self, row, t_max_len=None, q_max_len=None, a_max_len=None):
         qa_id = row.qa_id
 #        title = self.tokenizer.tokenize(row.question_title)
 #        body = self.tokenizer.tokenize(row.question_body)
@@ -183,10 +177,10 @@ class QUESTDataset(Dataset):
         if self.use_category:
             title = [category] + title
 
-        title, body, answer = self._trim_input(title, body, answer,
-                                               t_max_len=t_max_len,
-                                               q_max_len=q_max_len,
-                                               a_max_len=a_max_len)
+        # title, body, answer = self._trim_input(title, body, answer,
+        #                                        t_max_len=t_max_len,
+        #                                        q_max_len=q_max_len,
+        #                                        a_max_len=a_max_len)
 
         title_and_body = title + [self.TBSEP] + body
         # title_and_body = title + f' {self.TBSEP} ' + body
@@ -277,14 +271,14 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
         self.input_bert_layer = BertLayer(input_model_config)
 
         # use bertmodel as decoder
-        self.model.config.is_decoder = True
+        # self.model.config.is_decoder = True
 
         # add modules
         self.add_module('my_input_embeddings', self.input_embeddings)
         self.add_module('my_input_bert_layer', self.input_bert_layer)
         self.add_module('fc_output', self.classifier)
 
-    def forward(self, input_ids=None, input_ids_2=None, input_cats=None, labels=None, attention_mask=None,
+    def forward(self, input_ids=None, input_cats=None, labels=None, attention_mask=None,
                 token_type_ids=None, position_ids=None, head_mask=None,
                 inputs_embeds=None, encoder_hidden_states=None,
                 encoder_attention_mask=None):
@@ -304,16 +298,13 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
         layer_output = self.input_bert_layer(embedding_output)
         inputs_embeds = layer_output[0]  # fit to bertmodel
 
-        outputs = self.model(input_ids=input_ids_2[:, :512],
-                             attention_mask=None,
-                             # attention_mask=attention_mask[:, :512],
-                             token_type_ids=None,
-                             # token_type_ids=token_type_ids[:, :512],
-                             position_ids=None,
+        outputs = self.model(input_ids=None,
+                             attention_mask=attention_mask[:, :512, :],
+                             token_type_ids=token_type_ids[:, :512, :],
+                             position_ids=position_ids[:, :512, :],
                              head_mask=None,
-                             # inputs_embeds=inputs_embeds[:, :512, :],
-                             inputs_embeds=None,
-                             encoder_hidden_states=inputs_embeds,
+                             inputs_embeds=inputs_embeds[:, :512, :],
+                             encoder_hidden_states=None,
                              encoder_attention_mask=None)
         # pooled_output = outputs[1]
         pooled_output = torch.mean(outputs[0], dim=1)
@@ -367,11 +358,10 @@ def train_one_epoch(model, fobj, optimizer, loader):
     model.train()
 
     running_loss = 0
-    for (qa_id, input_ids, input_ids_2, attention_mask,
+    for (qa_id, input_ids, attention_mask,
          token_type_ids, cat_labels, position_ids, labels) in tqdm(loader):
         # send them to DEVICE
         input_ids = input_ids.to(DEVICE)
-        input_ids_2 = input_ids_2.to(DEVICE)
         attention_mask = attention_mask.to(DEVICE)
         token_type_ids = token_type_ids.to(DEVICE)
         # cat_labels = cat_labels.to(DEVICE)
@@ -381,7 +371,6 @@ def train_one_epoch(model, fobj, optimizer, loader):
         # forward
         outputs = model(
             input_ids=input_ids,
-            input_ids_2=input_ids_2,
             # input_cats=cat_labels,
             labels=labels,
             attention_mask=attention_mask,
@@ -411,11 +400,10 @@ def test(model, fobj, loader, tta=False):
         y_preds, y_trues, qa_ids = [], [], []
 
         running_loss = 0
-        for (qa_id, input_ids, input_ids_2, attention_mask,
+        for (qa_id, input_ids, attention_mask,
              token_type_ids, cat_labels, position_ids, labels) in tqdm(loader):
             # send them to DEVICE
             input_ids = input_ids.to(DEVICE)
-            input_ids_2 = input_ids_2.to(DEVICE)
             attention_mask = attention_mask.to(DEVICE)
             token_type_ids = token_type_ids.to(DEVICE)
             # cat_labels = cat_labels.to(DEVICE)
@@ -425,7 +413,6 @@ def test(model, fobj, loader, tta=False):
             # forward
             outputs = model(
                 input_ids=input_ids,
-                input_ids_2=input_ids_2,
                 # input_cats=cat_labels,
                 labels=labels,
                 attention_mask=attention_mask,
@@ -488,7 +475,7 @@ def main(args, logger):
     #     pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
     # ).MAX_SEQUENCE_LENGTH
     # max_seq_len = 9458
-    max_seq_len = 1504
+    max_seq_len = 1024
 
     fold_best_metrics = []
     fold_best_metrics_raws = []

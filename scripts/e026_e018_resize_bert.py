@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from scipy.stats import spearmanr
 from sklearn.model_selection import GroupKFold
 from torch import nn, optim
-from torch.nn import BCEWithLogitsLoss
+from torch.nn import BCEWithLogitsLoss, DataParallel
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
@@ -108,18 +108,12 @@ class QUESTDataset(Dataset):
         # change online preprocess or off line preprocess
         # idx_row = self.prep_df.iloc[idx]
         idx_row = self.original_df.iloc[idx].copy()
-        idx_row_2 = self.original_df.iloc[idx].copy()
         # idx_row = self._augment(idx_row)
         idx_row = self.__preprocess_text_row(idx_row,
                                              t_max_len=100,
                                              q_max_len=700,
                                              a_max_len=700)
-        idx_row_2 = self.__preprocess_text_row(idx_row_2,
-                                               t_max_len=30,
-                                               q_max_len=239,
-                                               a_max_len=239)
         input_ids = idx_row['input_ids'].squeeze()
-        input_ids_2 = idx_row_2['input_ids'].squeeze()
         token_type_ids = idx_row['token_type_ids'].squeeze()
         attention_mask = idx_row['attention_mask'].squeeze()
         qa_id = idx_row['qa_id'].squeeze()
@@ -128,7 +122,7 @@ class QUESTDataset(Dataset):
         position_ids = torch.arange(self.MAX_SEQUENCE_LENGTH)
 
         labels = self.labels.iloc[idx].values
-        return qa_id, input_ids, input_ids_2, attention_mask, \
+        return qa_id, input_ids, attention_mask, \
             token_type_ids, cat_labels, position_ids, labels
 
     def _trim_input(self, title, question, answer,
@@ -270,21 +264,18 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             self.model.resize_token_embeddings(token_size)
 
         # define input embedding and transformers
-        input_model_config = BertConfig(
-            vocab_size=token_size,
-            max_position_embeddings=MAX_SEQUENCE_LENGTH)
-        self.input_embeddings = BertEmbeddings(input_model_config)
-        self.input_bert_layer = BertLayer(input_model_config)
+        self.model.embeddings.position_embeddings = self._resize_embeddings(
+            self.model.embeddings.position_embeddings, MAX_SEQUENCE_LENGTH)
 
         # use bertmodel as decoder
-        self.model.config.is_decoder = True
+        # self.model.config.is_decoder = True
 
         # add modules
-        self.add_module('my_input_embeddings', self.input_embeddings)
-        self.add_module('my_input_bert_layer', self.input_bert_layer)
-        self.add_module('fc_output', self.classifier)
+        # self.add_module('my_input_embeddings', self.input_embeddings)
+        # self.add_module('my_input_bert_layer', self.input_bert_layer)
+        # self.add_module('fc_output', self.classifier)
 
-    def forward(self, input_ids=None, input_ids_2=None, input_cats=None, labels=None, attention_mask=None,
+    def forward(self, input_ids=None, input_cats=None, labels=None, attention_mask=None,
                 token_type_ids=None, position_ids=None, head_mask=None,
                 inputs_embeds=None, encoder_hidden_states=None,
                 encoder_attention_mask=None):
@@ -293,27 +284,29 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             # encoder_hidden_states = self.catembedding(input_cats)
             # encoder_hidden_states = self.catdropout(encoder_hidden_states)
             # encoder_hidden_states = self.catactivate(encoder_hidden_states)
-        if input_cats or inputs_embeds or encoder_hidden_states or encoder_attention_mask:
-            raise NotImplementedError
+        # if input_cats or inputs_embeds or encoder_hidden_states or encoder_attention_mask:
+        #     raise NotImplementedError
 
-        embedding_output = self.input_embeddings(
-            input_ids=input_ids,
-            position_ids=position_ids,
-            token_type_ids=token_type_ids,
-            inputs_embeds=inputs_embeds)
-        layer_output = self.input_bert_layer(embedding_output)
-        inputs_embeds = layer_output[0]  # fit to bertmodel
+        # embedding_output = self.input_embeddings(
+        #     input_ids=input_ids,
+        #     position_ids=position_ids,
+        #     token_type_ids=token_type_ids,
+        #     inputs_embeds=inputs_embeds)
+        # layer_output = self.input_bert_layer(embedding_output)
+        # inputs_embeds = layer_output[0]  # fit to bertmodel
 
-        outputs = self.model(input_ids=input_ids_2[:, :512],
-                             attention_mask=None,
+        # outputs = self.model(input_ids=input_ids_2[:, :512],
+        outputs = self.model(input_ids=input_ids,
                              # attention_mask=attention_mask[:, :512],
-                             token_type_ids=None,
+                             attention_mask=attention_mask,
                              # token_type_ids=token_type_ids[:, :512],
+                             token_type_ids=token_type_ids,
                              position_ids=None,
                              head_mask=None,
                              # inputs_embeds=inputs_embeds[:, :512, :],
                              inputs_embeds=None,
-                             encoder_hidden_states=inputs_embeds,
+                             # encoder_hidden_states=inputs_embeds,
+                             encoder_hidden_states=None,
                              encoder_attention_mask=None)
         # pooled_output = outputs[1]
         pooled_output = torch.mean(outputs[0], dim=1)
@@ -347,6 +340,22 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
                 for param in child.parameters():
                     param.requires_grad = True
 
+    def _resize_embeddings(self, old_embeddings, new_num_tokens):
+        old_num_tokens, old_embedding_dim = old_embeddings.weight.size()
+        if old_num_tokens == new_num_tokens:
+            return old_embeddings
+
+        # Build new embeddings
+        new_embeddings = nn.Embedding(new_num_tokens, old_embedding_dim)
+        new_embeddings.to(old_embeddings.weight.device)
+
+        # Copy word embeddings from the previous weights
+        num_tokens_to_copy = min(old_num_tokens, new_num_tokens)
+        new_embeddings.weight.data[:num_tokens_to_copy,
+                                   :] = old_embeddings.weight.data[:num_tokens_to_copy, :]
+
+        return new_embeddings
+
 
 # --- metrics ---
 def compute_spearmanr(trues, preds):
@@ -367,11 +376,10 @@ def train_one_epoch(model, fobj, optimizer, loader):
     model.train()
 
     running_loss = 0
-    for (qa_id, input_ids, input_ids_2, attention_mask,
+    for (qa_id, input_ids, attention_mask,
          token_type_ids, cat_labels, position_ids, labels) in tqdm(loader):
         # send them to DEVICE
         input_ids = input_ids.to(DEVICE)
-        input_ids_2 = input_ids_2.to(DEVICE)
         attention_mask = attention_mask.to(DEVICE)
         token_type_ids = token_type_ids.to(DEVICE)
         # cat_labels = cat_labels.to(DEVICE)
@@ -381,7 +389,6 @@ def train_one_epoch(model, fobj, optimizer, loader):
         # forward
         outputs = model(
             input_ids=input_ids,
-            input_ids_2=input_ids_2,
             # input_cats=cat_labels,
             labels=labels,
             attention_mask=attention_mask,
@@ -411,11 +418,10 @@ def test(model, fobj, loader, tta=False):
         y_preds, y_trues, qa_ids = [], [], []
 
         running_loss = 0
-        for (qa_id, input_ids, input_ids_2, attention_mask,
+        for (qa_id, input_ids, attention_mask,
              token_type_ids, cat_labels, position_ids, labels) in tqdm(loader):
             # send them to DEVICE
             input_ids = input_ids.to(DEVICE)
-            input_ids_2 = input_ids_2.to(DEVICE)
             attention_mask = attention_mask.to(DEVICE)
             token_type_ids = token_type_ids.to(DEVICE)
             # cat_labels = cat_labels.to(DEVICE)
@@ -425,7 +431,6 @@ def test(model, fobj, loader, tta=False):
             # forward
             outputs = model(
                 input_ids=input_ids,
-                input_ids_2=input_ids_2,
                 # input_cats=cat_labels,
                 labels=labels,
                 attention_mask=attention_mask,
@@ -580,6 +585,7 @@ def main(args, logger):
                 model.freeze_unfreeze_bert(freeze=True, logger=logger)
             else:
                 model.freeze_unfreeze_bert(freeze=False, logger=logger)
+            model = DataParallel(model)
             model = model.to(DEVICE)
             if fold <= loaded_fold and epoch <= loaded_epoch:
                 continue
@@ -616,6 +622,9 @@ def main(args, logger):
                 f'val_metric : {float(val_metric):.4f} -- '
                 f'val_metric_raws : {logging_val_metric_raws}',
                 logger)
+            _model = model.module
+            del model
+            model = _model
             model = model.to('cpu')
             save_checkpoint(
                 f'{MNT_DIR}/checkpoints/{EXP_ID}/{fold}',
