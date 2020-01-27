@@ -33,7 +33,7 @@ DEVICE = 'cuda'
 MODEL_PRETRAIN = 'bert-base-uncased'
 # MODEL_CONFIG = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
-BATCH_SIZE = 8
+BATCH_SIZE = 16
 MAX_EPOCH = 6
 
 
@@ -622,10 +622,8 @@ def main(args, logger):
                 f'val_metric : {float(val_metric):.4f} -- '
                 f'val_metric_raws : {logging_val_metric_raws}',
                 logger)
-            _model = model.module
-            del model
-            model = _model
             model = model.to('cpu')
+            model = model.module
             save_checkpoint(
                 f'{MNT_DIR}/checkpoints/{EXP_ID}/{fold}',
                 model,
