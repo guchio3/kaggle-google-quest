@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from scipy.stats import spearmanr
 from sklearn.model_selection import GroupKFold
 from torch import nn, optim
-from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, DataParallel, MSELoss
+from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, DataParallel, MSELoss, Softmax
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
@@ -262,10 +262,12 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             self.classifiers = []
             class_num = [9, 9, 5, 5, 5, 5, 9, 9, 5, 5, 5, 5, 5, 5,
                          5, 5, 5, 5, 5, 3, 9, 9, 9, 9, 9, 17, 5, 5, 5, 9]
+            # class_num = [17, ] * 30
             for cls_idx in range(30):
-                self.classifiers.append(nn.Linear(
-                    self.model.pooler.dense.out_features, class_num[cls_idx]))
-
+                temp_clsfier = nn.Linear(
+                    self.model.pooler.dense.out_features, class_num[cls_idx])
+                self.classifiers.append(temp_clsfier)
+                self.add_module(f'fc_output_{cls_idx}', temp_clsfier)
         # resize
         if token_size:
             self.model.resize_token_embeddings(token_size)
@@ -328,6 +330,7 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             logits.append(self.classifiers[cls_id](pooled_output))
 
         # add hidden states and attention if they are here
+        # outputs = logits + outputs[2:]
         outputs = (logits,) + outputs[2:]
 
         return outputs  # logits, (hidden_states), (attentions)
@@ -404,7 +407,9 @@ def train_one_epoch(model, fobj, optimizer, loader):
             token_type_ids=token_type_ids,
             #            position_ids=position_ids
         )
-        loss = fobj(outputs[0], labels)
+        loss = 0
+        for cls_idx in range(30):
+            loss += fobj(outputs[0][cls_idx], labels[:, cls_idx])
 
         # backword and update
         optimizer.zero_grad()
@@ -446,12 +451,19 @@ def test(model, fobj, loader, tta=False):
                 token_type_ids=token_type_ids,
                 #                position_ids=position_ids
             )
-            logits = outputs[0]
-            loss = fobj(logits, labels)
+            # logits = outputs[0]
+            # loss = fobj(logits, labels)
+            loss = 0
+            _y_preds = torch.zeros(labels.shape)
+            softmax = Softmax(dim=1)
+            for cls_idx in range(30):
+                loss += fobj(outputs[0][cls_idx], labels[:, cls_idx])
+                _preds = softmax(outputs[0][cls_idx]).argmax(dim=1)
+                _y_preds[:, cls_idx] = _preds
 
             running_loss += loss
 
-            y_preds.append(torch.sigmoid(logits))
+            y_preds.append(_y_preds)
             y_trues.append(labels)
             qa_ids.append(qa_id)
 
@@ -514,7 +526,7 @@ def main(args, logger):
             .reset_index(drop=True)\
             .reset_index()\
             .set_index(target_col)\
-            .to_dict()
+            .to_dict()['index']
         trn_df.loc[:, target_col] = trn_df[target_col].map(map_dict).values
 
     gkf = GroupKFold(
