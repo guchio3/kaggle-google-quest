@@ -33,7 +33,7 @@ DEVICE = 'cuda'
 MODEL_PRETRAIN = 'bert-base-uncased'
 # MODEL_CONFIG = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
-BATCH_SIZE = 4
+BATCH_SIZE = 8
 MAX_EPOCH = 6
 
 
@@ -415,7 +415,6 @@ def train_one_epoch(model, fobj, optimizer, loader):
         position_ids = position_ids.to(DEVICE)
         labels = labels.to(DEVICE)
 
-        print('max_pos_ids : ', position_ids.max())
         # forward
         outputs = model(
             input_ids=input_ids,
@@ -619,7 +618,7 @@ def main(args, logger):
                 model.freeze_unfreeze_bert(freeze=True, logger=logger)
             else:
                 model.freeze_unfreeze_bert(freeze=False, logger=logger)
-            # model = DataParallel(model)
+            model = DataParallel(model)
             model = model.to(DEVICE)
             trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader)
             val_loss, val_metric, val_metric_raws, val_y_preds, val_y_trues, val_qa_ids = test(
