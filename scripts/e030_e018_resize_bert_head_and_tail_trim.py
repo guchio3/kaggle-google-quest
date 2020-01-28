@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from scipy.stats import spearmanr
 from sklearn.model_selection import GroupKFold
 from torch import nn, optim
-from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, DataParallel, MSELoss, Softmax
+from torch.nn import BCEWithLogitsLoss, DataParallel, MSELoss
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
@@ -113,9 +113,12 @@ class QUESTDataset(Dataset):
                                              t_max_len=30,
                                              q_max_len=239,
                                              a_max_len=239)
-        # t_max_len=100,
-        # q_max_len=700,
-        # a_max_len=700)
+                                             # t_max_len=30,
+                                             # q_max_len=239,
+                                             # a_max_len=239)
+                                             # t_max_len=100,
+                                             # q_max_len=700,
+                                             # a_max_len=700)
         input_ids = idx_row['input_ids'].squeeze()
         token_type_ids = idx_row['token_type_ids'].squeeze()
         attention_mask = idx_row['attention_mask'].squeeze()
@@ -157,9 +160,18 @@ class QUESTDataset(Dataset):
             #     raise ValueError("New sequence length should be %d, but is %d"
             #                      % (self.MAX_SEQUENCE_LENGTH,
             #                          (t_new_len + a_new_len + q_new_len + 4)))
-            title = title[:t_new_len]
-            question = question[:q_new_len]
-            answer = answer[:a_new_len]
+            if len(title) > t_new_len:
+                title = title[:t_new_len//2] + title[-t_new_len//2:]
+            else:
+                title = title[:t_new_len]
+            if len(question) > q_new_len:
+                question = question[:q_new_len//2] + question[-q_new_len//2:]
+            else:
+                question = question[:q_new_len]
+            if len(answer) > a_new_len:
+                answer = answer[:a_new_len//2] + answer[-a_new_len//2:]
+            else:
+                answer = answer[:a_new_len]
         return title, question, answer
 
     def __preprocess_text_row(self, row, t_max_len, q_max_len, a_max_len):
@@ -259,15 +271,9 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             self.catembeddingOut = None
             self.catactivateOut = None
             self.dropout = nn.Dropout(0.2)
-            self.classifiers = []
-            class_num = [9, 9, 5, 5, 5, 5, 9, 9, 5, 5, 5, 5, 5, 5,
-                         5, 5, 5, 5, 5, 3, 9, 9, 9, 9, 9, 17, 5, 5, 5, 9]
-            # class_num = [17, ] * 30
-            for cls_idx in range(30):
-                temp_clsfier = nn.Linear(
-                    self.model.pooler.dense.out_features, class_num[cls_idx])
-                self.classifiers.append(temp_clsfier)
-                self.add_module(f'fc_output_{cls_idx}', temp_clsfier)
+            self.classifier = nn.Linear(
+                self.model.pooler.dense.out_features, num_labels)
+
         # resize
         if token_size:
             self.model.resize_token_embeddings(token_size)
@@ -325,12 +331,9 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             pooled_output = torch.cat([pooled_output, outcat], -1)
 
         pooled_output = self.dropout(pooled_output)
-        logits = []
-        for cls_id in range(30):
-            logits.append(self.classifiers[cls_id](pooled_output))
+        logits = self.classifier(pooled_output)
 
         # add hidden states and attention if they are here
-        # outputs = logits + outputs[2:]
         outputs = (logits,) + outputs[2:]
 
         return outputs  # logits, (hidden_states), (attentions)
@@ -407,9 +410,7 @@ def train_one_epoch(model, fobj, optimizer, loader):
             token_type_ids=token_type_ids,
             #            position_ids=position_ids
         )
-        loss = 0
-        for cls_idx in range(30):
-            loss += fobj(outputs[0][cls_idx], labels[:, cls_idx])
+        loss = fobj(outputs[0], labels.float())
 
         # backword and update
         optimizer.zero_grad()
@@ -451,19 +452,12 @@ def test(model, fobj, loader, tta=False):
                 token_type_ids=token_type_ids,
                 #                position_ids=position_ids
             )
-            # logits = outputs[0]
-            # loss = fobj(logits, labels)
-            loss = 0
-            _y_preds = torch.zeros(labels.shape)
-            softmax = Softmax(dim=1)
-            for cls_idx in range(30):
-                loss += fobj(outputs[0][cls_idx], labels[:, cls_idx])
-                _preds = softmax(outputs[0][cls_idx]).argmax(dim=1)
-                _y_preds[:, cls_idx] = _preds
+            logits = outputs[0]
+            loss = fobj(logits, labels.float())
 
             running_loss += loss
 
-            y_preds.append(_y_preds)
+            y_preds.append(torch.sigmoid(logits))
             y_trues.append(labels)
             qa_ids.append(qa_id)
 
@@ -487,47 +481,6 @@ def main(args, logger):
     # aug_df['is_original'] = 0
 
     # trn_df = pd.concat([trn_df, aug_df], axis=0).reset_index(drop=True)
-
-    # convert target to labels
-    target_cols = ['question_asker_intent_understanding',
-                   'question_body_critical',
-                   'question_conversational',
-                   'question_expect_short_answer',
-                   'question_fact_seeking',
-                   'question_has_commonly_accepted_answer',
-                   'question_interestingness_others',
-                   'question_interestingness_self',
-                   'question_multi_intent',
-                   'question_not_really_a_question',
-                   'question_opinion_seeking',
-                   'question_type_choice',
-                   'question_type_compare',
-                   'question_type_consequence',
-                   'question_type_definition',
-                   'question_type_entity',
-                   'question_type_instructions',
-                   'question_type_procedure',
-                   'question_type_reason_explanation',
-                   'question_type_spelling',
-                   'question_well_written',
-                   'answer_helpful',
-                   'answer_level_of_information',
-                   'answer_plausible',
-                   'answer_relevance',
-                   'answer_satisfaction',
-                   'answer_type_instructions',
-                   'answer_type_procedure',
-                   'answer_type_reason_explanation',
-                   'answer_well_written']
-    for target_col in target_cols:
-        map_dict = trn_df[target_col]\
-            .drop_duplicates()\
-            .sort_values()\
-            .reset_index(drop=True)\
-            .reset_index()\
-            .set_index(target_col)\
-            .to_dict()['index']
-        trn_df.loc[:, target_col] = trn_df[target_col].map(map_dict).values
 
     gkf = GroupKFold(
         n_splits=5).split(
@@ -627,9 +580,8 @@ def main(args, logger):
                                 drop_last=False,
                                 pin_memory=True)
 
-        # fobj = BCEWithLogitsLoss()
+        fobj = BCEWithLogitsLoss()
         # fobj = MSELoss()
-        fobj = CrossEntropyLoss()
         model = BertModelForBinaryMultiLabelClassifier(num_labels=30,
                                                        pretrained_model_name_or_path=MODEL_PRETRAIN,
                                                        # cat_num=5,
