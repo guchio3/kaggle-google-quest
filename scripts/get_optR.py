@@ -111,7 +111,7 @@ def main():
         y_pred_argmin = np.argmin(y_pred)
 
         optR = OptimizedRounder()
-        labels = np.sort(np.unique(y_trues[:, i]))
+        labels = np.sort(np.unique(y_true))
         optR.set_labels(labels)
         initial_coef = (labels[:-1] + labels[1:]) / 2
         optR.fit(y_pred, y_true, initial_coef=initial_coef)
@@ -129,6 +129,10 @@ def main():
 
     with open(f'{BASE_PATH}/optRs.pkl', 'wb') as fout:
         pickle.dump(optRs, fout)
+
+    original_score = compute_spearmanr(y_trues, y_preds)
+    print(f'original_score: {original_score}')
+    print(f'original_score: {np.mean(original_score)}')
 
     res_score = compute_spearmanr(y_trues, reses)
     print(f'res_score: {res_score}')
