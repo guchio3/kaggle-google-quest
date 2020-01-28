@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from scipy.stats import spearmanr
 from sklearn.model_selection import GroupKFold
 from torch import nn, optim
-from torch.nn import BCEWithLogitsLoss, DataParallel
+from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, DataParallel, MSELoss
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
@@ -34,7 +34,7 @@ MODEL_PRETRAIN = 'bert-base-uncased'
 # MODEL_CONFIG = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
-MAX_EPOCH = 8
+MAX_EPOCH = 6
 
 
 def seed_everything(seed=71):
@@ -110,9 +110,12 @@ class QUESTDataset(Dataset):
         idx_row = self.original_df.iloc[idx].copy()
         # idx_row = self._augment(idx_row)
         idx_row = self.__preprocess_text_row(idx_row,
-                                             t_max_len=100,
-                                             q_max_len=700,
-                                             a_max_len=700)
+                                             t_max_len=30,
+                                             q_max_len=239,
+                                             a_max_len=239)
+        # t_max_len=100,
+        # q_max_len=700,
+        # a_max_len=700)
         input_ids = idx_row['input_ids'].squeeze()
         token_type_ids = idx_row['token_type_ids'].squeeze()
         attention_mask = idx_row['attention_mask'].squeeze()
@@ -256,8 +259,12 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             self.catembeddingOut = None
             self.catactivateOut = None
             self.dropout = nn.Dropout(0.2)
-            self.classifier = nn.Linear(
-                self.model.pooler.dense.out_features, num_labels)
+            self.classifiers = []
+            class_num = [9, 9, 5, 5, 5, 5, 9, 9, 5, 5, 5, 5, 5, 5,
+                         5, 5, 5, 5, 5, 3, 9, 9, 9, 9, 9, 17, 5, 5, 5, 9]
+            for cls_idx in range(30):
+                self.classifiers.append(nn.Linear(
+                    self.model.pooler.dense.out_features, class_num[cls_idx]))
 
         # resize
         if token_size:
@@ -316,7 +323,9 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             pooled_output = torch.cat([pooled_output, outcat], -1)
 
         pooled_output = self.dropout(pooled_output)
-        logits = self.classifier(pooled_output)
+        logits = []
+        for cls_id in range(30):
+            logits.append(self.classifiers[cls_id](pooled_output))
 
         # add hidden states and attention if they are here
         outputs = (logits,) + outputs[2:]
@@ -467,6 +476,47 @@ def main(args, logger):
 
     # trn_df = pd.concat([trn_df, aug_df], axis=0).reset_index(drop=True)
 
+    # convert target to labels
+    target_cols = ['question_asker_intent_understanding',
+                   'question_body_critical',
+                   'question_conversational',
+                   'question_expect_short_answer',
+                   'question_fact_seeking',
+                   'question_has_commonly_accepted_answer',
+                   'question_interestingness_others',
+                   'question_interestingness_self',
+                   'question_multi_intent',
+                   'question_not_really_a_question',
+                   'question_opinion_seeking',
+                   'question_type_choice',
+                   'question_type_compare',
+                   'question_type_consequence',
+                   'question_type_definition',
+                   'question_type_entity',
+                   'question_type_instructions',
+                   'question_type_procedure',
+                   'question_type_reason_explanation',
+                   'question_type_spelling',
+                   'question_well_written',
+                   'answer_helpful',
+                   'answer_level_of_information',
+                   'answer_plausible',
+                   'answer_relevance',
+                   'answer_satisfaction',
+                   'answer_type_instructions',
+                   'answer_type_procedure',
+                   'answer_type_reason_explanation',
+                   'answer_well_written']
+    for target_col in target_cols:
+        map_dict = trn_df[target_col]\
+            .drop_duplicates()\
+            .sort_values()\
+            .reset_index(drop=True)\
+            .reset_index()\
+            .set_index(target_col)\
+            .to_dict()
+        trn_df.loc[:, target_col] = trn_df[target_col].map(map_dict).values
+
     gkf = GroupKFold(
         n_splits=5).split(
         X=trn_df.question_body,
@@ -493,7 +543,8 @@ def main(args, logger):
     #     pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
     # ).MAX_SEQUENCE_LENGTH
     # max_seq_len = 9458
-    max_seq_len = 1504
+    # max_seq_len = 1504
+    max_seq_len = 512
 
     fold_best_metrics = []
     fold_best_metrics_raws = []
@@ -564,7 +615,9 @@ def main(args, logger):
                                 drop_last=False,
                                 pin_memory=True)
 
-        fobj = BCEWithLogitsLoss()
+        # fobj = BCEWithLogitsLoss()
+        # fobj = MSELoss()
+        fobj = CrossEntropyLoss()
         model = BertModelForBinaryMultiLabelClassifier(num_labels=30,
                                                        pretrained_model_name_or_path=MODEL_PRETRAIN,
                                                        # cat_num=5,
@@ -581,14 +634,14 @@ def main(args, logger):
             load_checkpoint(args.checkpoint, model, optimizer, scheduler)
 
         for epoch in tqdm(list(range(MAX_EPOCH))):
+            if fold <= loaded_fold and epoch <= loaded_epoch:
+                continue
             if epoch < 1:
                 model.freeze_unfreeze_bert(freeze=True, logger=logger)
             else:
                 model.freeze_unfreeze_bert(freeze=False, logger=logger)
             model = DataParallel(model)
             model = model.to(DEVICE)
-            if fold <= loaded_fold and epoch <= loaded_epoch:
-                continue
             trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader)
             val_loss, val_metric, val_metric_raws, val_y_preds, val_y_trues, val_qa_ids = test(
                 model, fobj, val_loader)
@@ -669,5 +722,5 @@ if __name__ == '__main__':
     logger = logInit(logger, f'{MNT_DIR}/logs/', log_file)
     sel_log(f'args: {sorted(vars(args).items())}', logger)
 
-    send_line_notification(f' ------------- start {EXP_ID} ------------- ')
+    # send_line_notification(f' ------------- start {EXP_ID} ------------- ')
     main(args, logger)

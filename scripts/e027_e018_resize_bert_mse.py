@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from scipy.stats import spearmanr
 from sklearn.model_selection import GroupKFold
 from torch import nn, optim
-from torch.nn import BCEWithLogitsLoss, DataParallel
+from torch.nn import BCEWithLogitsLoss, DataParallel, MSELoss
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
@@ -34,7 +34,7 @@ MODEL_PRETRAIN = 'bert-base-uncased'
 # MODEL_CONFIG = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
-MAX_EPOCH = 8
+MAX_EPOCH = 6
 
 
 def seed_everything(seed=71):
@@ -110,9 +110,12 @@ class QUESTDataset(Dataset):
         idx_row = self.original_df.iloc[idx].copy()
         # idx_row = self._augment(idx_row)
         idx_row = self.__preprocess_text_row(idx_row,
-                                             t_max_len=100,
-                                             q_max_len=700,
-                                             a_max_len=700)
+                                             t_max_len=30,
+                                             q_max_len=239,
+                                             a_max_len=239)
+                                             # t_max_len=100,
+                                             # q_max_len=700,
+                                             # a_max_len=700)
         input_ids = idx_row['input_ids'].squeeze()
         token_type_ids = idx_row['token_type_ids'].squeeze()
         attention_mask = idx_row['attention_mask'].squeeze()
@@ -395,7 +398,7 @@ def train_one_epoch(model, fobj, optimizer, loader):
             token_type_ids=token_type_ids,
             #            position_ids=position_ids
         )
-        loss = fobj(outputs[0], labels)
+        loss = fobj(outputs[0], labels.float())
 
         # backword and update
         optimizer.zero_grad()
@@ -438,7 +441,7 @@ def test(model, fobj, loader, tta=False):
                 #                position_ids=position_ids
             )
             logits = outputs[0]
-            loss = fobj(logits, labels)
+            loss = fobj(logits, labels.float())
 
             running_loss += loss
 
@@ -493,7 +496,8 @@ def main(args, logger):
     #     pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
     # ).MAX_SEQUENCE_LENGTH
     # max_seq_len = 9458
-    max_seq_len = 1504
+    # max_seq_len = 1504
+    max_seq_len = 512
 
     fold_best_metrics = []
     fold_best_metrics_raws = []
@@ -564,7 +568,8 @@ def main(args, logger):
                                 drop_last=False,
                                 pin_memory=True)
 
-        fobj = BCEWithLogitsLoss()
+        # fobj = BCEWithLogitsLoss()
+        fobj = MSELoss()
         model = BertModelForBinaryMultiLabelClassifier(num_labels=30,
                                                        pretrained_model_name_or_path=MODEL_PRETRAIN,
                                                        # cat_num=5,
@@ -581,14 +586,14 @@ def main(args, logger):
             load_checkpoint(args.checkpoint, model, optimizer, scheduler)
 
         for epoch in tqdm(list(range(MAX_EPOCH))):
+            if fold <= loaded_fold and epoch <= loaded_epoch:
+                continue
             if epoch < 1:
                 model.freeze_unfreeze_bert(freeze=True, logger=logger)
             else:
                 model.freeze_unfreeze_bert(freeze=False, logger=logger)
             model = DataParallel(model)
             model = model.to(DEVICE)
-            if fold <= loaded_fold and epoch <= loaded_epoch:
-                continue
             trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader)
             val_loss, val_metric, val_metric_raws, val_y_preds, val_y_trues, val_qa_ids = test(
                 model, fobj, val_loader)
@@ -669,5 +674,5 @@ if __name__ == '__main__':
     logger = logInit(logger, f'{MNT_DIR}/logs/', log_file)
     sel_log(f'args: {sorted(vars(args).items())}', logger)
 
-    send_line_notification(f' ------------- start {EXP_ID} ------------- ')
+    # send_line_notification(f' ------------- start {EXP_ID} ------------- ')
     main(args, logger)
