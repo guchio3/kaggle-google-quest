@@ -5,7 +5,9 @@ from glob import glob
 import numpy as np
 import pandas as pd
 import scipy as sp
+import torch
 from scipy.stats import spearmanr
+from tqdm import tqdm
 
 
 class OptimizedRounder(object):
@@ -91,24 +93,37 @@ def main():
 
     y_preds = []
     y_trues = []
-    for i in range(5):
-        ckpt = glob(f'{BASE_PATH}/{i}/*.pth')[0]
+    for i in tqdm(list(range(5))):
+        ckpt = torch.load(glob(f'{BASE_PATH}/{i}/*.pth')[0])
         y_preds.append(ckpt['val_y_preds'])
         y_trues.append(ckpt['val_y_trues'])
-    y_preds = np.conatenate(y_preds)
-    y_trues = np.conatenate(y_trues)
+    y_preds = np.concatenate(y_preds)
+    y_trues = np.concatenate(y_trues)
 
     reses = []
     optRs = []
 
-    for i in range(30):
+    for i in tqdm(list(range(30))):
+        y_pred = y_preds[:, i]
+        y_true = y_trues[:, i]
+
+        y_pred_argmax = np.argmax(y_pred)
+        y_pred_argmin = np.argmin(y_pred)
+
         optR = OptimizedRounder()
         labels = np.sort(np.unique(y_trues[:, i]))
         optR.set_labels(labels)
         initial_coef = (labels[:-1] + labels[1:]) / 2
-        optR.fit(y_preds[:, i], y_trues[:, i], initial_coef=initial_coef)
+        optR.fit(y_pred, y_true, initial_coef=initial_coef)
         optRs.append(optR)
-        res = optR.predict(y_preds[:, i], optR.coefficients())
+        res = optR.predict(y_pred, optR.coefficients())
+
+        if len(np.unique(res)) == 1:
+            if np.unique(res) == res[y_pred_argmax]:
+                res[y_pred_argmin] = np.min(y_true)
+            else:
+                res[y_pred_argmax] = np.max(y_true)
+
         reses.append(res)
     reses = np.asarray(reses).T
 
@@ -117,6 +132,7 @@ def main():
 
     res_score = compute_spearmanr(y_trues, reses)
     print(f'res_score: {res_score}')
+    print(f'res_score_mean: {np.mean(res_score)}')
 
 
 if __name__ == '__main__':
