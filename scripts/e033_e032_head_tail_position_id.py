@@ -138,6 +138,7 @@ class QUESTDataset(Dataset):
 
     def _trim_input(self, title, question, answer,
                     t_max_len, q_max_len, a_max_len):
+        whole_len = t_max_len + q_max_len + a_max_len + 4
 
         t_len = len(title)
         q_len = len(question)
@@ -172,10 +173,10 @@ class QUESTDataset(Dataset):
             #                          (t_new_len + a_new_len + q_new_len + 4)))
             if len(title) > t_new_len:
                 title = title[:t_new_len // 2] + title[-t_new_len // 2:]
-            else:
-                title_position_ids = [i for i in range(len(title))]
                 title_position_ids = [i for i in range(t_new_len // 2)] \
                     + [i for i in range(512 - (t_new_len // 2), 512)]
+            else:
+                title_position_ids = [i for i in range(len(title))]
             if len(question) > q_new_len:
                 question = question[:q_new_len // 2] + \
                     question[-q_new_len // 2:]
@@ -189,10 +190,13 @@ class QUESTDataset(Dataset):
                     + [i for i in range(512 - (a_new_len // 2), 512)]
             else:
                 answer_position_ids = [i for i in range(len(answer))]
+        else:
+            title_position_ids = [i for i in range(len(title))]
+            question_position_ids = [i for i in range(len(question))]
+            answer_position_ids = [i for i in range(len(answer))]
 
-            position_ids = title_position_ids + question_position_ids + answer_position_ids
-            position_ids += [0] * (t_max_len + q_max_len +
-                                   a_max_len + 4 - len(position_ids))  # padding
+        position_ids = title_position_ids + question_position_ids + answer_position_ids
+        position_ids += [0] * (whole_len - len(position_ids))  # padding
         return title, question, answer, position_ids
 
     def __preprocess_text_row(self, row, t_max_len, q_max_len, a_max_len):
