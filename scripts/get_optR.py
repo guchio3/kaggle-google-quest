@@ -86,8 +86,8 @@ def compute_spearmanr(trues, preds):
     return rhos
 
 
-def main():
-    BASE_PATH = './mnt/checkpoints/e030/'
+def opt(BASE_PATH):
+    # BASE_PATH = './mnt/checkpoints/e030/'
 
     y_preds = []
     y_trues = []
@@ -118,6 +118,8 @@ def main():
     res_score = compute_spearmanr(y_trues, reses)
     print(f'res_score: {res_score}')
 
+    return res_score
+
 
 if __name__ == '__main__':
-    main()
+    opt()
