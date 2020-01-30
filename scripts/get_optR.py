@@ -1,3 +1,4 @@
+import sys
 import pickle
 from functools import partial
 from glob import glob
@@ -88,7 +89,7 @@ def compute_spearmanr(trues, preds):
     return rhos
 
 
-def opt(BASE_PATH):
+def opt(BASE_PATH, num_labels):
     # BASE_PATH = './mnt/checkpoints/e030/'
 
     y_preds = []
@@ -103,7 +104,7 @@ def opt(BASE_PATH):
     reses = []
     optRs = []
 
-    for i in tqdm(list(range(30))):
+    for i in tqdm(list(range(num_labels))):
         y_pred = y_preds[:, i]
         y_true = y_trues[:, i]
 
@@ -142,4 +143,8 @@ def opt(BASE_PATH):
 
 
 if __name__ == '__main__':
-    opt()
+    args = sys.argv
+    base_path = args[1]
+    if len(args) == 3:
+        num_labels = int(args[2])
+    opt(base_path, num_labels)
