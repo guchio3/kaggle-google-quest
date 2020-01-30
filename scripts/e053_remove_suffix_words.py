@@ -17,8 +17,6 @@ from torch.nn import BCEWithLogitsLoss, DataParallel, MSELoss
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
-from my_optim import AdamW
-from my_optim2 import Adam
 
 from get_optR import opt
 from transformers import BertConfig, BertForMaskedLM, BertModel, BertTokenizer
@@ -190,6 +188,11 @@ class QUESTDataset(Dataset):
 #        answer = row.answer.casefold()
 #        category = row.category
         category = ('CAT_' + row.category).casefold()
+
+        # remove ## types words
+        title = [word for word in title if '##' not in word]
+        body = [word for word in body if '##' not in word]
+        answer = [word for word in answer if '##' not in word]
 
         # category を text として入れてしまう !!!
         if self.use_category:
@@ -592,8 +595,7 @@ def main(args, logger):
                                                            trn_dataset.tokenizer),
                                                        MAX_SEQUENCE_LENGTH=max_seq_len,
                                                        )
-        # optimizer = AdamW(model.parameters(), lr=3e-5, correct_bias=False)
-        optimizer = Adam(model.parameters(), lr=3e-5)
+        optimizer = optim.Adam(model.parameters(), lr=3e-5)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
 
@@ -606,13 +608,8 @@ def main(args, logger):
                 continue
             if epoch < 1:
                 model.freeze_unfreeze_bert(freeze=True, logger=logger)
-                optimizer.param_groups[0]["lr"] = 1e-3
-#            elif epoch == 2:
-#                model.freeze_unfreeze_bert(freeze=False, logger=logger)
-#                optimizer.param_groups[0]["lr"] = 3e-5
             else:
                 model.freeze_unfreeze_bert(freeze=False, logger=logger)
-            sel_log(f'lr: {optimizer.param_groups[0]["lr"]}', logger)
             model = DataParallel(model)
             model = model.to(DEVICE)
             trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader)
