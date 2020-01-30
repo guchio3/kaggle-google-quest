@@ -13,14 +13,13 @@ from matplotlib import pyplot as plt
 from scipy.stats import spearmanr
 from sklearn.model_selection import GroupKFold
 from torch import nn, optim
-from torch.nn import (BCEWithLogitsLoss, DataParallel, MarginRankingLoss,
-                      MSELoss)
+from torch.nn import BCEWithLogitsLoss, DataParallel, MSELoss
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
+
 from transformers import BertConfig, BertForMaskedLM, BertModel, BertTokenizer
 from transformers.modeling_bert import BertEmbeddings, BertLayer
-
 from utils import (dec_timer, load_checkpoint, logInit, parse_args,
                    save_and_clean_for_prediction, save_checkpoint, sel_log,
                    send_line_notification)
@@ -35,26 +34,7 @@ MODEL_PRETRAIN = 'bert-base-uncased'
 # MODEL_CONFIG = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
-MAX_EPOCH = 6
-
-
-LABEL_COL = [
-    'question_asker_intent_understanding', 'question_body_critical',
-    'question_conversational', 'question_expect_short_answer',
-    'question_fact_seeking', 'question_has_commonly_accepted_answer',
-    'question_interestingness_others', 'question_interestingness_self',
-    'question_multi_intent', 'question_not_really_a_question',
-    'question_opinion_seeking', 'question_type_choice',
-    'question_type_compare', 'question_type_consequence',
-    'question_type_definition', 'question_type_entity',
-    'question_type_instructions', 'question_type_procedure',
-    'question_type_reason_explanation', 'question_type_spelling',
-    'question_well_written', 'answer_helpful',
-    'answer_level_of_information', 'answer_plausible', 'answer_relevance',
-    'answer_satisfaction', 'answer_type_instructions',
-    'answer_type_procedure', 'answer_type_reason_explanation',
-    'answer_well_written'
-]
+MAX_EPOCH = 10
 
 
 def seed_everything(seed=71):
@@ -87,8 +67,7 @@ class QUESTDataset(Dataset):
             #     input_ids = row['input_ids'].squeeze()
             #     if self.MAX_SEQUENCE_LENGTH < len(input_ids):
             #         self.MAX_SEQUENCE_LENGTH = len(input_ids)
-            # sel_log(f'calculated seq_len: {self.MAX_SEQUENCE_LENGTH}',
-            # logger)
+            # sel_log(f'calculated seq_len: {self.MAX_SEQUENCE_LENGTH}', logger)
         self.use_category = use_category
         self.logger = logger
         self.cat_dict = {
@@ -102,8 +81,7 @@ class QUESTDataset(Dataset):
         if mode == "test":
             self.labels = pd.DataFrame([[-1] * 30] * len(df))
         else:  # train or valid
-            # self.labels = df.iloc[:, 11:]
-            self.labels = df[LABEL_COL]
+            self.labels = df.iloc[:, 11:]
 
         self.tokenizer = BertTokenizer.from_pretrained(
             pretrained_model_name_or_path, do_lower_case=True)
@@ -135,12 +113,12 @@ class QUESTDataset(Dataset):
                                              t_max_len=30,
                                              q_max_len=239,
                                              a_max_len=239)
-        # t_max_len=30,
-        # q_max_len=239,
-        # a_max_len=239)
-        # t_max_len=100,
-        # q_max_len=700,
-        # a_max_len=700)
+                                             # t_max_len=30,
+                                             # q_max_len=239,
+                                             # a_max_len=239)
+                                             # t_max_len=100,
+                                             # q_max_len=700,
+                                             # a_max_len=700)
         input_ids = idx_row['input_ids'].squeeze()
         token_type_ids = idx_row['token_type_ids'].squeeze()
         attention_mask = idx_row['attention_mask'].squeeze()
@@ -148,11 +126,10 @@ class QUESTDataset(Dataset):
         # cat_labels = idx_row['cat_label'].squeeze()
         cat_labels = -1
         position_ids = torch.arange(self.MAX_SEQUENCE_LENGTH)
-        question_body_grp_count = idx_row['question_body_grp_count'].squeeze()
 
         labels = self.labels.iloc[idx].values
         return qa_id, input_ids, attention_mask, \
-            token_type_ids, cat_labels, position_ids, question_body_grp_count, labels
+            token_type_ids, cat_labels, position_ids, labels
 
     def _trim_input(self, title, question, answer,
                     t_max_len, q_max_len, a_max_len):
@@ -184,16 +161,15 @@ class QUESTDataset(Dataset):
             #                      % (self.MAX_SEQUENCE_LENGTH,
             #                          (t_new_len + a_new_len + q_new_len + 4)))
             if len(title) > t_new_len:
-                title = title[:t_new_len // 2] + title[-t_new_len // 2:]
+                title = title[:t_new_len//2] + title[-t_new_len//2:]
             else:
                 title = title[:t_new_len]
             if len(question) > q_new_len:
-                question = question[:q_new_len // 2] + \
-                    question[-q_new_len // 2:]
+                question = question[:q_new_len//2] + question[-q_new_len//2:]
             else:
                 question = question[:q_new_len]
             if len(answer) > a_new_len:
-                answer = answer[:a_new_len // 2] + answer[-a_new_len // 2:]
+                answer = answer[:a_new_len//2] + answer[-a_new_len//2:]
             else:
                 answer = answer[:a_new_len]
         return title, question, answer
@@ -237,7 +213,6 @@ class QUESTDataset(Dataset):
         )
         encoded_texts_dict['qa_id'] = qa_id
         encoded_texts_dict['cat_label'] = self.cat_dict[category]
-        encoded_texts_dict['question_body_grp_count'] = row['question_body_grp_count']
         return encoded_texts_dict
 
     def _preprocess_texts(self, df):
@@ -297,8 +272,7 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             self.catactivateOut = None
             self.dropout = nn.Dropout(0.2)
             self.classifier = nn.Linear(
-                self.model.pooler.dense.out_features + 1, num_labels)
-        self.add_module('fc_output', self.classifier)
+                self.model.pooler.dense.out_features, num_labels)
 
         # resize
         if token_size:
@@ -314,10 +288,11 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
         # add modules
         # self.add_module('my_input_embeddings', self.input_embeddings)
         # self.add_module('my_input_bert_layer', self.input_bert_layer)
-        # self.add_module('fc_output', self.classifier)
+        self.add_module('do_output', self.dropout)
+        self.add_module('fc_output', self.classifier)
 
     def forward(self, input_ids=None, input_cats=None, labels=None, attention_mask=None,
-                token_type_ids=None, position_ids=None, question_body_grp_count=None, head_mask=None,
+                token_type_ids=None, position_ids=None, head_mask=None,
                 inputs_embeds=None, encoder_hidden_states=None,
                 encoder_attention_mask=None):
         if self.catembedding:
@@ -356,9 +331,7 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             outcat = self.catactivateOut(outcat)
             pooled_output = torch.cat([pooled_output, outcat], -1)
 
-        pooled_output = self.dropout(pooled_output)
-        pooled_output = torch.cat(
-            [pooled_output, question_body_grp_count.float().reshape(-1, 1)], dim=1)
+        # pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
 
         # add hidden states and attention if they are here
@@ -415,19 +388,18 @@ def compute_spearmanr(trues, preds):
     return rhos
 
 
-def train_one_epoch(model, fobj, optimizer, loader, pair_fobj=None):
+def train_one_epoch(model, fobj, optimizer, loader):
     model.train()
 
     running_loss = 0
     for (qa_id, input_ids, attention_mask,
-         token_type_ids, cat_labels, position_ids, question_body_grp_count, labels) in tqdm(loader):
+         token_type_ids, cat_labels, position_ids, labels) in tqdm(loader):
         # send them to DEVICE
         input_ids = input_ids.to(DEVICE)
         attention_mask = attention_mask.to(DEVICE)
         token_type_ids = token_type_ids.to(DEVICE)
         # cat_labels = cat_labels.to(DEVICE)
         position_ids = position_ids.to(DEVICE)
-        question_body_grp_count = question_body_grp_count.to(DEVICE)
         labels = labels.to(DEVICE)
 
         # forward
@@ -438,17 +410,8 @@ def train_one_epoch(model, fobj, optimizer, loader, pair_fobj=None):
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             #            position_ids=position_ids
-            question_body_grp_count=question_body_grp_count,
         )
         loss = fobj(outputs[0], labels.float())
-        if pair_fobj:
-            shuffle_idx = torch.randperm(len(labels))
-            shuffled_logits = outputs[0][shuffle_idx]
-            shuffled_pair_labels = (
-                outputs[0] > shuffled_logits) + (outputs[0] <= shuffled_logits) * -1
-            loss += pair_fobj(outputs[0],
-                              shuffled_logits,
-                              shuffled_pair_labels)
 
         # backword and update
         optimizer.zero_grad()
@@ -472,14 +435,13 @@ def test(model, fobj, loader, tta=False):
 
         running_loss = 0
         for (qa_id, input_ids, attention_mask,
-             token_type_ids, cat_labels, position_ids, question_body_grp_count, labels) in tqdm(loader):
+             token_type_ids, cat_labels, position_ids, labels) in tqdm(loader):
             # send them to DEVICE
             input_ids = input_ids.to(DEVICE)
             attention_mask = attention_mask.to(DEVICE)
             token_type_ids = token_type_ids.to(DEVICE)
             # cat_labels = cat_labels.to(DEVICE)
             position_ids = position_ids.to(DEVICE)
-            question_body_grp_count = question_body_grp_count.to(DEVICE)
             labels = labels.to(DEVICE)
 
             # forward
@@ -490,7 +452,6 @@ def test(model, fobj, loader, tta=False):
                 attention_mask=attention_mask,
                 token_type_ids=token_type_ids,
                 #                position_ids=position_ids
-                question_body_grp_count=question_body_grp_count,
             )
             logits = outputs[0]
             loss = fobj(logits, labels.float())
@@ -516,10 +477,6 @@ def test(model, fobj, loader, tta=False):
 def main(args, logger):
     # trn_df = pd.read_csv(f'{MNT_DIR}/inputs/origin/train.csv')
     trn_df = pd.read_pickle(f'{MNT_DIR}/inputs/nes_info/trn_df.pkl')
-    trn_df['question_body_grp_count'] = pd.read_pickle(
-        './mnt/inputs/nes_info/question_body_grp_count.pkl').values
-    trn_df['question_body_grp_count'] = (
-        trn_df['question_body_grp_count'] - trn_df['question_body_grp_count'].mean()) / trn_df['question_body_grp_count'].std()
     trn_df['is_original'] = 1
     # aug_df = pd.read_pickle(f'{MNT_DIR}/inputs/nes_info/ContextualWordEmbsAug_sub_df.pkl')
     # aug_df['is_original'] = 0
@@ -626,7 +583,6 @@ def main(args, logger):
 
         fobj = BCEWithLogitsLoss()
         # fobj = MSELoss()
-        # pair_fobj = MarginRankingLoss()
         model = BertModelForBinaryMultiLabelClassifier(num_labels=30,
                                                        pretrained_model_name_or_path=MODEL_PRETRAIN,
                                                        # cat_num=5,
@@ -651,8 +607,7 @@ def main(args, logger):
                 model.freeze_unfreeze_bert(freeze=False, logger=logger)
             model = DataParallel(model)
             model = model.to(DEVICE)
-            trn_loss = train_one_epoch(
-                model, fobj, optimizer, trn_loader)
+            trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader)
             val_loss, val_metric, val_metric_raws, val_y_preds, val_y_trues, val_qa_ids = test(
                 model, fobj, val_loader)
 
