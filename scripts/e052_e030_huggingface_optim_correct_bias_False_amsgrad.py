@@ -591,7 +591,8 @@ def main(args, logger):
                                                            trn_dataset.tokenizer),
                                                        MAX_SEQUENCE_LENGTH=max_seq_len,
                                                        )
-        optimizer = AdamW(model.parameters(), lr=3e-5, correct_bias=False)
+        # optimizer = AdamW(model.parameters(), lr=3e-5, correct_bias=False)
+        optimizer = AdamW(model.parameters(), correct_bias=False)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
 
@@ -603,7 +604,7 @@ def main(args, logger):
             if fold <= loaded_fold and epoch <= loaded_epoch:
                 continue
             if epoch < 1:
-                model.freeze_unfreeze_bert(freeze=True, logger=logger)
+                model.freeze_unfreeze_bert(freeze=False, logger=logger)
             else:
                 model.freeze_unfreeze_bert(freeze=False, logger=logger)
             model = DataParallel(model)
@@ -612,7 +613,7 @@ def main(args, logger):
             val_loss, val_metric, val_metric_raws, val_y_preds, val_y_trues, val_qa_ids = test(
                 model, fobj, val_loader)
 
-            # scheduler.step()
+            scheduler.step()
             if fold in histories['trn_loss']:
                 histories['trn_loss'][fold].append(trn_loss)
             else:
