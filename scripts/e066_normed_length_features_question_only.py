@@ -38,6 +38,40 @@ BATCH_SIZE = 8
 MAX_EPOCH = 6
 
 
+LABEL_COL = [
+    'question_asker_intent_understanding',
+    'question_body_critical',
+    'question_conversational',
+    'question_expect_short_answer',
+    'question_fact_seeking',
+    'question_has_commonly_accepted_answer',
+    'question_interestingness_others',
+    'question_interestingness_self',
+    'question_multi_intent',
+    'question_not_really_a_question',
+    'question_opinion_seeking',
+    'question_type_choice',
+    'question_type_compare',
+    'question_type_consequence',
+    'question_type_definition',
+    'question_type_entity',
+    'question_type_instructions',
+    'question_type_procedure',
+    'question_type_reason_explanation',
+    'question_type_spelling',
+    'question_well_written',
+#    'answer_helpful',
+#    'answer_level_of_information',
+#    'answer_plausible',
+#    'answer_relevance',
+#    'answer_satisfaction',
+#    'answer_type_instructions',
+#    'answer_type_procedure',
+#    'answer_type_reason_explanation',
+#    'answer_well_written'
+]
+
+
 def seed_everything(seed=71):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -83,7 +117,7 @@ class QUESTDataset(Dataset):
         if mode == "test":
             self.labels = pd.DataFrame([[-1] * 30] * len(df))
         else:  # train or valid
-            self.labels = df.iloc[:, 11:]
+            self.labels = df[LABEL_COL]
 
         self.tokenizer = BertTokenizer.from_pretrained(
             pretrained_model_name_or_path, do_lower_case=True)
@@ -616,7 +650,7 @@ def main(args, logger):
         fobj = BCEWithLogitsLoss()
         # fobj = MSELoss()
         pair_fobj = MarginRankingLoss()
-        model = BertModelForBinaryMultiLabelClassifier(num_labels=30,
+        model = BertModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
                                                        pretrained_model_name_or_path=MODEL_PRETRAIN,
                                                        # cat_num=5,
                                                        token_size=len(
