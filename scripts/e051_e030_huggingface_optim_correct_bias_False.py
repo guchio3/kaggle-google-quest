@@ -591,7 +591,7 @@ def main(args, logger):
                                                            trn_dataset.tokenizer),
                                                        MAX_SEQUENCE_LENGTH=max_seq_len,
                                                        )
-        optimizer = AdamW(model.parameters(), lr=3e-5, correct_bias=False)
+        optimizer = AdamW(model.parameters(), lr=3e-5, correct_bias=False, eps=1e-7)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
 
