@@ -89,7 +89,7 @@ def compute_spearmanr(trues, preds):
     return rhos
 
 
-def opt(BASE_PATH, num_labels):
+def opt(BASE_PATH, num_labels=30):
     # BASE_PATH = './mnt/checkpoints/e030/'
 
     y_preds = []
