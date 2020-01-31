@@ -620,7 +620,7 @@ def main(args, logger):
         # fobj = BCEWithLogitsLoss()
         # fobj = MSELoss()
         # fobj = FocalLoss(gamma=0).to(DEVICE)
-        fobj = FocalLossKaggle(gamma=3)
+        fobj = FocalLossKaggle(gamma=-2)
         model = BertModelForBinaryMultiLabelClassifier(num_labels=21,
                                                        pretrained_model_name_or_path=MODEL_PRETRAIN,
                                                        # cat_num=5,
