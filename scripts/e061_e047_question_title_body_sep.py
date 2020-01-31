@@ -234,8 +234,12 @@ class QUESTDataset(Dataset):
 
         # title_and_body = title + [self.TBSEP] + body
         # title_and_body = title + f' {self.TBSEP} ' + body
+        if len(body) == 0:
+            body += ['_']
 
         encoded_texts_dict = self.tokenizer.encode_plus(
+            # text=title_and_body,
+            # text_pair=answer,
             text=title,
             text_pair=body,
             add_special_tokens=True,
