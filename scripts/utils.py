@@ -135,9 +135,9 @@ def save_checkpoint(save_dir, model, optimizer, scheduler,
         'optim_state_dict': optimizer.state_dict(),
         'scheduler_state_dict': scheduler.state_dict(),
         'histories': histories,
-        'val_y_preds': val_y_preds,
-        'val_y_trues': val_y_trues,
-        'val_qa_ids': val_qa_ids,
+        'val_y_preds': val_y_preds.to('cpu'),
+        'val_y_trues': val_y_trues.to('cpu'),
+        'val_qa_ids': val_qa_ids.to('cpu'),
     }
     sel_log(f'now saving checkpoint to {cp_filename} ...', None)
     torch.save(cp_dict, cp_filename)
