@@ -23,7 +23,7 @@ from transformers.modeling_bert import BertEmbeddings, BertLayer
 from utils import (dec_timer, load_checkpoint, logInit, parse_args,
                    save_and_clean_for_prediction, save_checkpoint, sel_log,
                    send_line_notification)
-from losses import ArcFaceLoss
+from losses import FocalLoss, FocalLossWithOutOneHot, FocalLossKaggle
 
 # import nlpaug.augmenter.word as naw
 
@@ -31,6 +31,7 @@ from losses import ArcFaceLoss
 EXP_ID = os.path.basename(__file__).split('_')[0]
 MNT_DIR = './mnt'
 DEVICE = 'cuda'
+# DEVICE = 'cpu'
 MODEL_PRETRAIN = 'bert-base-uncased'
 # MODEL_CONFIG = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
@@ -618,7 +619,8 @@ def main(args, logger):
 
         # fobj = BCEWithLogitsLoss()
         # fobj = MSELoss()
-        fobj = ArcFaceLoss()
+        # fobj = FocalLoss(gamma=0).to(DEVICE)
+        fobj = FocalLossKaggle(gamma=0)
         model = BertModelForBinaryMultiLabelClassifier(num_labels=21,
                                                        pretrained_model_name_or_path=MODEL_PRETRAIN,
                                                        # cat_num=5,
