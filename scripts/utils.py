@@ -143,7 +143,7 @@ def save_checkpoint(save_dir, model, optimizer, scheduler,
     torch.save(cp_dict, cp_filename)
 
 
-def save_and_clean_for_prediction(cp_dir, tokenizer):
+def save_and_clean_for_prediction(cp_dir, tokenizer, clean=True):
     checkpoints = glob(f'{cp_dir}/*.pth')
 
     cp_df_base = []
@@ -165,7 +165,7 @@ def save_and_clean_for_prediction(cp_dir, tokenizer):
                            .iterrows()):
             if i == 0:
                 best_row = row
-            else:
+            elif clean:
                 # rm w/o best row
                 os.remove(row['checkpoint'])
         tokenizer.save_pretrained(cp_dir)

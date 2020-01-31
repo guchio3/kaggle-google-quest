@@ -17,9 +17,7 @@ from torch.nn import BCEWithLogitsLoss, DataParallel, MSELoss
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
-from my_optim import AdamW
 
-from get_optR import opt
 from transformers import BertConfig, BertForMaskedLM, BertModel, BertTokenizer
 from transformers.modeling_bert import BertEmbeddings, BertLayer
 from utils import (dec_timer, load_checkpoint, logInit, parse_args,
@@ -37,6 +35,40 @@ MODEL_PRETRAIN = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
 MAX_EPOCH = 6
+
+
+LABEL_COL = [
+#    'question_asker_intent_understanding',
+#    'question_body_critical',
+#    'question_conversational',
+#    'question_expect_short_answer',
+#    'question_fact_seeking',
+#    'question_has_commonly_accepted_answer',
+#    'question_interestingness_others',
+#    'question_interestingness_self',
+#    'question_multi_intent',
+#    'question_not_really_a_question',
+#    'question_opinion_seeking',
+#    'question_type_choice',
+#    'question_type_compare',
+#    'question_type_consequence',
+#    'question_type_definition',
+#    'question_type_entity',
+#    'question_type_instructions',
+#    'question_type_procedure',
+#    'question_type_reason_explanation',
+#    'question_type_spelling',
+#    'question_well_written',
+    'answer_helpful',
+    'answer_level_of_information',
+    'answer_plausible',
+    'answer_relevance',
+    'answer_satisfaction',
+    'answer_type_instructions',
+    'answer_type_procedure',
+    'answer_type_reason_explanation',
+    'answer_well_written'
+]
 
 
 def seed_everything(seed=71):
@@ -81,9 +113,9 @@ class QUESTDataset(Dataset):
         }
 
         if mode == "test":
-            self.labels = pd.DataFrame([[-1] * 30] * len(df))
+            self.labels = pd.DataFrame([[-1] * 21] * len(df))
         else:  # train or valid
-            self.labels = df.iloc[:, 11:]
+            self.labels = df[LABEL_COL]
 
         self.tokenizer = BertTokenizer.from_pretrained(
             pretrained_model_name_or_path, do_lower_case=True)
@@ -112,15 +144,15 @@ class QUESTDataset(Dataset):
         idx_row = self.original_df.iloc[idx].copy()
         # idx_row = self._augment(idx_row)
         idx_row = self.__preprocess_text_row(idx_row,
-                                             t_max_len=30,
-                                             q_max_len=239,
-                                             a_max_len=239)
-                                             # t_max_len=30,
-                                             # q_max_len=239,
-                                             # a_max_len=239)
-                                             # t_max_len=100,
-                                             # q_max_len=700,
-                                             # a_max_len=700)
+                                             t_max_len=0,
+                                             q_max_len=0,
+                                             a_max_len=239*2+30)
+        # t_max_len=30,
+        # q_max_len=239,
+        # a_max_len=239)
+        # t_max_len=100,
+        # q_max_len=700,
+        # a_max_len=700)
         input_ids = idx_row['input_ids'].squeeze()
         token_type_ids = idx_row['token_type_ids'].squeeze()
         attention_mask = idx_row['attention_mask'].squeeze()
@@ -163,15 +195,16 @@ class QUESTDataset(Dataset):
             #                      % (self.MAX_SEQUENCE_LENGTH,
             #                          (t_new_len + a_new_len + q_new_len + 4)))
             if len(title) > t_new_len:
-                title = title[:t_new_len//2] + title[-t_new_len//2:]
+                title = title[:t_new_len // 2] + title[-t_new_len // 2:]
             else:
                 title = title[:t_new_len]
             if len(question) > q_new_len:
-                question = question[:q_new_len//2] + question[-q_new_len//2:]
+                question = question[:q_new_len // 2] + \
+                    question[-q_new_len // 2:]
             else:
                 question = question[:q_new_len]
             if len(answer) > a_new_len:
-                answer = answer[:a_new_len//2] + answer[-a_new_len//2:]
+                answer = answer[:a_new_len // 2] + answer[-a_new_len // 2:]
             else:
                 answer = answer[:a_new_len]
         return title, question, answer
@@ -584,14 +617,14 @@ def main(args, logger):
 
         fobj = BCEWithLogitsLoss()
         # fobj = MSELoss()
-        model = BertModelForBinaryMultiLabelClassifier(num_labels=30,
+        model = BertModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
                                                        pretrained_model_name_or_path=MODEL_PRETRAIN,
                                                        # cat_num=5,
                                                        token_size=len(
                                                            trn_dataset.tokenizer),
                                                        MAX_SEQUENCE_LENGTH=max_seq_len,
                                                        )
-        optimizer = AdamW(model.parameters(), lr=3e-5, correct_bias=False, eps=1e-7)
+        optimizer = optim.Adam(model.parameters(), lr=3e-5)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
 
@@ -661,7 +694,8 @@ def main(args, logger):
             histories["val_metric_raws"][fold][np.argmax(histories["val_metric"][fold])])
         save_and_clean_for_prediction(
             f'{MNT_DIR}/checkpoints/{EXP_ID}/{fold}',
-            trn_dataset.tokenizer)
+            trn_dataset.tokenizer,
+            clean=False)
         del model
 
     # calc training stats
@@ -677,10 +711,6 @@ def main(args, logger):
         fold_raw_stats += f'{float(metric_stats_raw):.4f},'
     sel_log(fold_raw_stats, logger)
     send_line_notification(fold_raw_stats)
-
-    res_score = opt(f'{MNT_DIR}/checkpoints/{EXP_ID}/')
-    sel_log(f'res_score: {res_score}', logger)
-    send_line_notification(f'res_score: {res_score}')
 
     sel_log('now saving best checkpoints...', logger)
 
