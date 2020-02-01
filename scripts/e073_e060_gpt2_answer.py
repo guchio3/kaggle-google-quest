@@ -317,8 +317,8 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             self.model.resize_token_embeddings(token_size)
 
         # define input embedding and transformers
-        self.model.embeddings.position_embeddings = self._resize_embeddings(
-            self.model.embeddings.position_embeddings, MAX_SEQUENCE_LENGTH)
+        #self.model.embeddings.position_embeddings = self._resize_embeddings(
+        #    self.model.embeddings.position_embeddings, MAX_SEQUENCE_LENGTH)
 
         # use bertmodel as decoder
         # self.model.config.is_decoder = True
