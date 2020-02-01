@@ -147,7 +147,7 @@ class QUESTDataset(Dataset):
         # idx_row = self._augment(idx_row)
         idx_row = self.__preprocess_text_row(idx_row,
                                              t_max_len=30,
-                                             q_max_len=239*2,
+                                             q_max_len=239*2-2,
                                              a_max_len=0)
         # t_max_len=30,
         # q_max_len=239,
