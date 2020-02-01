@@ -17,9 +17,10 @@ from torch.nn import BCEWithLogitsLoss, DataParallel, MSELoss
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import RandomSampler, SequentialSampler
 from tqdm import tqdm
-
-from transformers import BertConfig, BertForMaskedLM, BertModel, BertTokenizer, GPT2Model, GPT2Tokenizer
+from transformers import (BertConfig, BertForMaskedLM, BertModel,
+                          BertTokenizer, GPT2Model, GPT2Tokenizer)
 from transformers.modeling_bert import BertEmbeddings, BertLayer
+
 from utils import (dec_timer, load_checkpoint, logInit, parse_args,
                    save_and_clean_for_prediction, save_checkpoint, sel_log,
                    send_line_notification)
@@ -30,7 +31,7 @@ from utils import (dec_timer, load_checkpoint, logInit, parse_args,
 EXP_ID = os.path.basename(__file__).split('_')[0]
 MNT_DIR = './mnt'
 DEVICE = 'cuda'
-# DEVICE = 'cpu'
+#DEVICE = 'cpu'
 MODEL_PRETRAIN = 'gpt2'
 # MODEL_CONFIG = 'bert-base-uncased'
 TOKENIZER_PRETRAIN = 'gpt2'
@@ -60,15 +61,15 @@ LABEL_COL = [
     'question_type_reason_explanation',
     'question_type_spelling',
     'question_well_written',
-#    'answer_helpful',
-#    'answer_level_of_information',
-#    'answer_plausible',
-#    'answer_relevance',
-#    'answer_satisfaction',
-#    'answer_type_instructions',
-#    'answer_type_procedure',
-#    'answer_type_reason_explanation',
-#    'answer_well_written'
+    #'answer_helpful',
+    #'answer_level_of_information',
+    #'answer_plausible',
+    #'answer_relevance',
+    #'answer_satisfaction',
+    #'answer_type_instructions',
+    #'answer_type_procedure',
+    #'answer_type_reason_explanation',
+    #'answer_well_written'
 ]
 
 
@@ -114,7 +115,7 @@ class QUESTDataset(Dataset):
         }
 
         if mode == "test":
-            self.labels = pd.DataFrame([[-1] * 21] * len(df))
+            self.labels = pd.DataFrame([[-1] * len(LABEL_COL)] * len(df))
         else:  # train or valid
             self.labels = df[LABEL_COL]
 
@@ -123,7 +124,7 @@ class QUESTDataset(Dataset):
             pretrained_model_name_or_path, do_lower_case=True)
         # self.tokenizer.add_special_tokens(
         #     {'additional_special_tokens': [self.TBSEP]})
-        self.tokenizer.add_tokens([self.TBSEP])
+        self.tokenizer.add_tokens([self.TBSEP, '[PAD]'])
 
         tokens = [token.encode('ascii', 'replace').decode()
                   for token in tokens if token != '']
@@ -147,8 +148,8 @@ class QUESTDataset(Dataset):
         # idx_row = self._augment(idx_row)
         idx_row = self.__preprocess_text_row(idx_row,
                                              t_max_len=30,
-                                             q_max_len=239*2,
-                                             a_max_len=0)
+                                             q_max_len=239 * 2,
+                                             a_max_len=239 * 0)
         # t_max_len=30,
         # q_max_len=239,
         # a_max_len=239)
@@ -237,6 +238,15 @@ class QUESTDataset(Dataset):
         title_and_body = title + [self.TBSEP] + body
         # title_and_body = title + f' {self.TBSEP} ' + body
 
+        if len(answer) == 0:
+            answer += ['_']
+
+        answer += [
+            '[PAD]' for i in range(
+                self.MAX_SEQUENCE_LENGTH -
+                len(title_and_body) -
+                len(answer))]
+
         encoded_texts_dict = self.tokenizer.encode_plus(
             text=title_and_body,
             text_pair=answer,
@@ -317,7 +327,7 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             self.model.resize_token_embeddings(token_size)
 
         # define input embedding and transformers
-        #self.model.embeddings.position_embeddings = self._resize_embeddings(
+        # self.model.embeddings.position_embeddings = self._resize_embeddings(
         #    self.model.embeddings.position_embeddings, MAX_SEQUENCE_LENGTH)
 
         # use bertmodel as decoder
@@ -361,8 +371,9 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
                              # inputs_embeds=inputs_embeds[:, :512, :],
                              inputs_embeds=None,
                              # encoder_hidden_states=inputs_embeds,
-                             encoder_hidden_states=None,
-                             encoder_attention_mask=None)
+                             # encoder_hidden_states=None,
+                             # encoder_attention_mask=None
+                             )
         # pooled_output = outputs[1]
         pooled_output = torch.mean(outputs[0], dim=1)
         if self.catembeddingOut:
@@ -549,7 +560,7 @@ def main(args, logger):
     # ).MAX_SEQUENCE_LENGTH
     # max_seq_len = 9458
     # max_seq_len = 1504
-    max_seq_len = 512 # roberta!
+    max_seq_len = 512  # roberta!
 
     fold_best_metrics = []
     fold_best_metrics_raws = []
@@ -599,7 +610,8 @@ def main(args, logger):
         trn_loader = DataLoader(trn_dataset,
                                 batch_size=BATCH_SIZE,
                                 sampler=trn_sampler,
-                                num_workers=os.cpu_count(),
+                                # num_workers=os.cpu_count(),
+                                num_workers=0,
                                 worker_init_fn=lambda x: np.random.seed(),
                                 drop_last=True,
                                 pin_memory=True)
@@ -623,7 +635,7 @@ def main(args, logger):
 
         fobj = BCEWithLogitsLoss()
         # fobj = MSELoss()
-        model = BertModelForBinaryMultiLabelClassifier(num_labels=21,
+        model = BertModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
                                                        pretrained_model_name_or_path=MODEL_PRETRAIN,
                                                        # cat_num=5,
                                                        token_size=len(
