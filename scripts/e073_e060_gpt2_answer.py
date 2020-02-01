@@ -197,16 +197,22 @@ class QUESTDataset(Dataset):
             #     raise ValueError("New sequence length should be %d, but is %d"
             #                      % (self.MAX_SEQUENCE_LENGTH,
             #                          (t_new_len + a_new_len + q_new_len + 4)))
-            if len(title) > t_new_len:
+            if t_new_len == 0:
+                title = []
+            elif len(title) > t_new_len:
                 title = title[:t_new_len // 2] + title[-t_new_len // 2:]
             else:
                 title = title[:t_new_len]
-            if len(question) > q_new_len:
+            if q_new_len == 0:
+                question = []
+            elif len(question) > q_new_len:
                 question = question[:q_new_len // 2] + \
                     question[-q_new_len // 2:]
             else:
                 question = question[:q_new_len]
-            if len(answer) > a_new_len:
+            if a_new_len == 0:
+                answer = []
+            elif len(answer) > a_new_len:
                 answer = answer[:a_new_len // 2] + answer[-a_new_len // 2:]
             else:
                 answer = answer[:a_new_len]
@@ -241,6 +247,10 @@ class QUESTDataset(Dataset):
         if len(answer) == 0:
             answer += ['_']
 
+        one_len = len(title_and_body) + len(answer)
+        zero_len = self.MAX_SEQUENCE_LENGTH - one_len
+        attention_mask = torch.tensor([1] * one_len + [0] * zero_len)
+        assert len(attention_mask) == self.MAX_SEQUENCE_LENGTH, len(attention_mask)
         answer += [
             '[PAD]' for i in range(
                 self.MAX_SEQUENCE_LENGTH -
@@ -260,6 +270,7 @@ class QUESTDataset(Dataset):
         )
         encoded_texts_dict['qa_id'] = qa_id
         encoded_texts_dict['cat_label'] = self.cat_dict[category]
+        encoded_texts_dict['attention_mask'] = attention_mask
         return encoded_texts_dict
 
     def _preprocess_texts(self, df):
@@ -610,8 +621,8 @@ def main(args, logger):
         trn_loader = DataLoader(trn_dataset,
                                 batch_size=BATCH_SIZE,
                                 sampler=trn_sampler,
-                                # num_workers=os.cpu_count(),
-                                num_workers=0,
+                                num_workers=os.cpu_count(),
+                                #num_workers=0,
                                 worker_init_fn=lambda x: np.random.seed(),
                                 drop_last=True,
                                 pin_memory=True)
