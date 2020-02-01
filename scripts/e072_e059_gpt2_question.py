@@ -301,7 +301,7 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             self.catactivateOut = nn.ReLU()
             self.dropout = nn.Dropout(0.2)
             self.classifier = nn.Linear(
-                self.model.pooler.dense.out_features + cat_num // 2 + 1, num_labels)
+                self.model.ln_f.weight.shape[0] + cat_num // 2 + 1, num_labels)
         else:
             self.catembedding = None
             self.catdropout = None
@@ -310,7 +310,7 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             self.catactivateOut = None
             self.dropout = nn.Dropout(0.2)
             self.classifier = nn.Linear(
-                self.model.pooler.dense.out_features, num_labels)
+                self.model.ln_f.weight.shape[0], num_labels)
 
         # resize
         if token_size:
