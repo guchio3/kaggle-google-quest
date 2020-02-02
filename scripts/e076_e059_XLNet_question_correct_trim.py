@@ -243,6 +243,9 @@ class QUESTDataset(Dataset):
         title_and_body = title + [self.TBSEP] + body
         # title_and_body = title + f' {self.TBSEP} ' + body
 
+        if len(answer) == 0:
+            answer = ['_']
+
         encoded_texts_dict = self.tokenizer.encode_plus(
             text=title_and_body,
             text_pair=answer,
@@ -604,7 +607,8 @@ def main(args, logger):
         trn_loader = DataLoader(trn_dataset,
                                 batch_size=BATCH_SIZE,
                                 sampler=trn_sampler,
-                                num_workers=os.cpu_count(),
+                                # num_workers=os.cpu_count(),
+                                num_workers=0,
                                 worker_init_fn=lambda x: np.random.seed(),
                                 drop_last=True,
                                 pin_memory=True)
