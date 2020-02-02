@@ -1,3 +1,4 @@
+import os
 import pickle
 import sys
 from functools import partial
@@ -229,8 +230,14 @@ def opt(BASE_PATH, num_labels=30, snapshot_num=2):
         pickle.dump(optRs, fout)
     with open(f'{BASE_PATH}/snapshot_dicts.pkl', 'wb') as fout:
         pickle.dump(snapshot_dicts, fout)
-    with open(f'{BASE_PATH}/state_dict_dicts.pkl', 'wb') as fout:
-        pickle.dump(state_dict_dicts, fout)
+    if not os.path.exists(f'{BASE_PATH}/state_dicts'):
+        os.mkdir(f'{BASE_PATH}/state_dicts')
+    for fold in range(5):
+        for rank in range(snapshot_num):
+            with open(f'{BASE_PATH}/state_dicts/fold_{fold}_rank_{rank}_state_dict.pkl', 'wb') as fout:
+                pickle.dump(state_dict_dicts[fold][rank], fout)
+    # with open(f'{BASE_PATH}/state_dict_dicts.pkl', 'wb') as fout:
+    #     pickle.dump(state_dict_dicts, fout)
 
     original_score = compute_spearmanr(y_trues, y_preds)
     print(f'original_score: {original_score}')
