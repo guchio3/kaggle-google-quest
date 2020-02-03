@@ -12,10 +12,10 @@ from torch.nn import BCEWithLogitsLoss, DataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
-from transformers import BertModel
+from transformers import RobertaModel
 
 from refactor.datasets import QUESTDataset
-from refactor.models import BertModelForBinaryMultiLabelClassifier
+from refactor.models import RobertaModelForBinaryMultiLabelClassifier
 from refactor.utils import compute_spearmanr, test, train_one_epoch
 from utils import (load_checkpoint, logInit, parse_args,
                    save_and_clean_for_prediction, save_checkpoint, sel_log,
@@ -24,13 +24,17 @@ from utils import (load_checkpoint, logInit, parse_args,
 EXP_ID = os.path.basename(__file__).split('_')[0]
 MNT_DIR = './mnt'
 DEVICE = 'cuda'
-MODEL_PRETRAIN = 'bert-base-uncased'
-MODEL_CONFIG_PATH = './mnt/datasets/model_configs/bert-model-uncased-config.pkl'
-TOKENIZER_TYPE = 'bert'
-TOKENIZER_PRETRAIN = 'bert-base-uncased'
+MODEL_PRETRAIN = 'roberta-base'
+MODEL_CONFIG_PATH = './mnt/datasets/model_configs/roberta-model-base-config.pkl'
+TOKENIZER_TYPE = 'roberta'
+TOKENIZER_PRETRAIN = 'roberta-base'
 BATCH_SIZE = 8
 MAX_EPOCH = 6
 MAX_SEQ_LEN = 512
+T_MAX_LEN = 30
+Q_MAX_LEN = 239 * 2
+A_MAX_LEN = 239 * 0
+DO_LOWER_CASE = True if MODEL_PRETRAIN == 'bert-base-uncased' else False
 
 
 LABEL_COL = [
@@ -143,11 +147,11 @@ def main(args, logger):
             augment=[],
             tokenizer_type=TOKENIZER_TYPE,
             pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
-            do_lower_case=True,
+            do_lower_case=DO_LOWER_CASE,
             LABEL_COL=LABEL_COL,
-            t_max_len=30,
-            q_max_len=239 * 2,
-            a_max_len=239 * 0,
+            t_max_len=T_MAX_LEN,
+            q_max_len=Q_MAX_LEN,
+            a_max_len=A_MAX_LEN,
             tqa_mode='tq_a',
             TBSEP='[TBSEP]',
             pos_id_type='arange',
@@ -169,11 +173,11 @@ def main(args, logger):
             augment=[],
             tokenizer_type=TOKENIZER_TYPE,
             pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
-            do_lower_case=True,
+            do_lower_case=DO_LOWER_CASE,
             LABEL_COL=LABEL_COL,
-            t_max_len=30,
-            q_max_len=239 * 2,
-            a_max_len=239 * 0,
+            t_max_len=T_MAX_LEN,
+            q_max_len=Q_MAX_LEN,
+            a_max_len=A_MAX_LEN,
             tqa_mode='tq_a',
             TBSEP='[TBSEP]',
             pos_id_type='arange',
@@ -189,8 +193,8 @@ def main(args, logger):
                                 pin_memory=True)
 
         fobj = BCEWithLogitsLoss()
-        state_dict = BertModel.from_pretrained(MODEL_PRETRAIN).state_dict()
-        model = BertModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
+        state_dict = RobertaModel.from_pretrained(MODEL_PRETRAIN).state_dict()
+        model = RobertaModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
                                                        config_path=MODEL_CONFIG_PATH,
                                                        state_dict=state_dict,
                                                        token_size=len(
