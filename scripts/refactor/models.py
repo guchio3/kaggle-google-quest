@@ -91,13 +91,13 @@ class RobertaModelForBinaryMultiLabelClassifier(nn.Module):
         self.model = RobertaModel(config)
         # only for roberta
         if self.model.state_dict()['embeddings.token_type_embeddings.weight'].shape[0] == 1:
-            self.model.embeddings.token_type_embeddings = self._resize_embeddings(
-                self.model.embeddings.token_type_embeddings, 2)
-            self.model.load_state_dict(state_dict)
-        elif self.model.state_dict()['embeddings.token_type_embeddings.weight'].shape[0] == 1:
             self.model.load_state_dict(state_dict)
             self.model.embeddings.token_type_embeddings = self._resize_embeddings(
                 self.model.embeddings.token_type_embeddings, 2)
+        elif self.model.state_dict()['embeddings.token_type_embeddings.weight'].shape[0] == 2:
+            self.model.embeddings.token_type_embeddings = self._resize_embeddings(
+                self.model.embeddings.token_type_embeddings, 2)
+            self.model.load_state_dict(state_dict)
         else:
             raise NotImplementedError
         self.dropout = nn.Dropout(0.2)
