@@ -89,17 +89,18 @@ class RobertaModelForBinaryMultiLabelClassifier(nn.Module):
         with open(config_path, 'rb') as fin:
             config = pickle.load(fin)
         self.model = RobertaModel(config)
-        # only for roberta
-        if self.model.state_dict()['embeddings.token_type_embeddings.weight'].shape[0] == 1:
-            self.model.load_state_dict(state_dict)
-            self.model.embeddings.token_type_embeddings = self._resize_embeddings(
-                self.model.embeddings.token_type_embeddings, 2)
-        elif self.model.state_dict()['embeddings.token_type_embeddings.weight'].shape[0] == 2:
-            self.model.embeddings.token_type_embeddings = self._resize_embeddings(
-                self.model.embeddings.token_type_embeddings, 2)
-            self.model.load_state_dict(state_dict)
-        else:
-            raise NotImplementedError
+        self.model.load_state_dict(state_dict)
+        # # only for roberta
+        # if self.model.state_dict()['embeddings.token_type_embeddings.weight'].shape[0] == 1:
+        #     self.model.load_state_dict(state_dict)
+        #     self.model.embeddings.token_type_embeddings = self._resize_embeddings(
+        #         self.model.embeddings.token_type_embeddings, 2)
+        # elif self.model.state_dict()['embeddings.token_type_embeddings.weight'].shape[0] == 2:
+        #     self.model.embeddings.token_type_embeddings = self._resize_embeddings(
+        #         self.model.embeddings.token_type_embeddings, 2)
+        #     self.model.load_state_dict(state_dict)
+        # else:
+        #     raise NotImplementedError
         self.dropout = nn.Dropout(0.2)
         self.classifier = nn.Linear(self.model.config.hidden_size, num_labels)
 
@@ -151,21 +152,21 @@ class RobertaModelForBinaryMultiLabelClassifier(nn.Module):
                 for param in child.parameters():
                     param.requires_grad = True
 
-    def _resize_embeddings(self, old_embeddings, new_num_tokens):
-        old_num_tokens, old_embedding_dim = old_embeddings.weight.size()
-        if old_num_tokens == new_num_tokens:
-            return old_embeddings
+    # def _resize_embeddings(self, old_embeddings, new_num_tokens):
+    #     old_num_tokens, old_embedding_dim = old_embeddings.weight.size()
+    #     if old_num_tokens == new_num_tokens:
+    #         return old_embeddings
 
-        # Build new embeddings
-        new_embeddings = nn.Embedding(new_num_tokens, old_embedding_dim)
-        new_embeddings.to(old_embeddings.weight.device)
+    #     # Build new embeddings
+    #     new_embeddings = nn.Embedding(new_num_tokens, old_embedding_dim)
+    #     new_embeddings.to(old_embeddings.weight.device)
 
-        # Copy word embeddings from the previous weights
-        num_tokens_to_copy = min(old_num_tokens, new_num_tokens)
-        new_embeddings.weight.data[:num_tokens_to_copy,
-                                   :] = old_embeddings.weight.data[:num_tokens_to_copy, :]
+    #     # Copy word embeddings from the previous weights
+    #     num_tokens_to_copy = min(old_num_tokens, new_num_tokens)
+    #     new_embeddings.weight.data[:num_tokens_to_copy,
+    #                                :] = old_embeddings.weight.data[:num_tokens_to_copy, :]
 
-        return new_embeddings
+    #     return new_embeddings
 
 
 class XLNetModelForBinaryMultiLabelClassifier(nn.Module):
