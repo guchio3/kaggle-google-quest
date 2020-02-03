@@ -158,6 +158,16 @@ class QUESTDataset(Dataset):
                                                q_max_len=q_max_len,
                                                a_max_len=a_max_len)
 
+        if len(title) == 0:
+            print(f'NO TITLE, qa_id: {qa_id}')
+            title = ['_']
+        if len(body) == 0:
+            print(f'NO BODY, qa_id: {qa_id}')
+            body = ['_']
+        if len(answer) == 0:
+            print(f'NO ANSWER, qa_id: {qa_id}')
+            answer = ['_']
+
         if self.tqa_mode == 'tq_a':
             text = title + [self.TBSEP] + body
             text_pair = answer
