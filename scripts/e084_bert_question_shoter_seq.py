@@ -30,10 +30,10 @@ TOKENIZER_TYPE = 'bert'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
 MAX_EPOCH = 6
-MAX_SEQ_LEN = 512
+MAX_SEQ_LEN = 512 - 239
 T_MAX_LEN = 30
-Q_MAX_LEN = 239 * 0
-A_MAX_LEN = 239 * 1
+Q_MAX_LEN = 239 * 1
+A_MAX_LEN = 239 * 0
 DO_LOWER_CASE = True if MODEL_PRETRAIN == 'bert-base-uncased' else False
 
 
