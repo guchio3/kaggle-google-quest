@@ -205,19 +205,19 @@ def main(args, logger):
         optimizer = optim.SGD(model.parameters(), lr=1e-1, momentum=0.9, nesterov=True)
         # scheduler = optim.lr_scheduler.CosineAnnealingLR(
         #     optimizer, T_max=MAX_EPOCH, eta_min=1e-3)
-        scheduler = optim.lr_scheduler.MultiStepLR(
-            optimizer, milestones=[1, 3, 5], gamma=0.1)
+        # scheduler = optim.lr_scheduler.MultiStepLR(
+        #     optimizer, milestones=[1, 3, 5], gamma=0.1)
 
-        # def func(epoch):
-        #     if epoch < 1:
-        #         return 0.1
-        #     elif epoch < 3:
-        #         return 0.01
-        #     elif epoch < 5:
-        #         return 0.0075
-        #     else:
-        #         return 0.001
-        # scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=func)
+        def func(epoch):
+            if epoch < 1:
+                return 0.1
+            elif epoch < 3:
+                return 0.01
+            elif epoch < 5:
+                return 0.0075
+            else:
+                return 0.001
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=func)
 
         # load checkpoint model, optim, scheduler
         if args.checkpoint and fold == loaded_fold:
