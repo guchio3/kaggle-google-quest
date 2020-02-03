@@ -97,6 +97,9 @@ class RobertaModelForBinaryMultiLabelClassifier(nn.Module):
         if token_size:
             self.model.resize_token_embeddings(token_size)
 
+        self.model.embeddings.token_type_embeddings = self._resize_embeddings(
+            self.model.embeddings.token_type_embeddings, 2)
+
         # add modules
         self.add_module('my_fc_output', self.classifier)
 
@@ -141,21 +144,21 @@ class RobertaModelForBinaryMultiLabelClassifier(nn.Module):
                 for param in child.parameters():
                     param.requires_grad = True
 
-    # def _resize_embeddings(self, old_embeddings, new_num_tokens):
-    #     old_num_tokens, old_embedding_dim = old_embeddings.weight.size()
-    #     if old_num_tokens == new_num_tokens:
-    #         return old_embeddings
+    def _resize_embeddings(self, old_embeddings, new_num_tokens):
+        old_num_tokens, old_embedding_dim = old_embeddings.weight.size()
+        if old_num_tokens == new_num_tokens:
+            return old_embeddings
 
-    #     # Build new embeddings
-    #     new_embeddings = nn.Embedding(new_num_tokens, old_embedding_dim)
-    #     new_embeddings.to(old_embeddings.weight.device)
+        # Build new embeddings
+        new_embeddings = nn.Embedding(new_num_tokens, old_embedding_dim)
+        new_embeddings.to(old_embeddings.weight.device)
 
-    #     # Copy word embeddings from the previous weights
-    #     num_tokens_to_copy = min(old_num_tokens, new_num_tokens)
-    #     new_embeddings.weight.data[:num_tokens_to_copy,
-    #                                :] = old_embeddings.weight.data[:num_tokens_to_copy, :]
+        # Copy word embeddings from the previous weights
+        num_tokens_to_copy = min(old_num_tokens, new_num_tokens)
+        new_embeddings.weight.data[:num_tokens_to_copy,
+                                   :] = old_embeddings.weight.data[:num_tokens_to_copy, :]
 
-    #     return new_embeddings
+        return new_embeddings
 
 
 class XLNetModelForBinaryMultiLabelClassifier(nn.Module):

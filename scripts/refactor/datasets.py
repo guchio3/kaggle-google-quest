@@ -41,6 +41,7 @@ class QUESTDataset(Dataset):
         else:  # train or valid
             self.labels = df[LABEL_COL]
 
+        self.tokenizer_type = tokenizer_type
         if tokenizer_type == 'bert':
             tokenizer = BertTokenizer
         elif tokenizer_type == 'roberta':
@@ -159,13 +160,13 @@ class QUESTDataset(Dataset):
                                                a_max_len=a_max_len)
 
         if len(title) == 0:
-            print(f'NO TITLE, qa_id: {qa_id}')
+            # print(f'NO TITLE, qa_id: {qa_id}')
             title = ['_']
         if len(body) == 0:
-            print(f'NO BODY, qa_id: {qa_id}')
+            # print(f'NO BODY, qa_id: {qa_id}')
             body = ['_']
         if len(answer) == 0:
-            print(f'NO ANSWER, qa_id: {qa_id}')
+            # print(f'NO ANSWER, qa_id: {qa_id}')
             answer = ['_']
 
         if self.tqa_mode == 'tq_a':
