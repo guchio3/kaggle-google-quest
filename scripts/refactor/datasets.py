@@ -76,7 +76,7 @@ class QUESTDataset(Dataset):
                                              a_max_len=self.a_max_len)
         input_ids = idx_row['input_ids'].squeeze()
         if self.tokenizer_type == 'roberta':
-            token_type_ids = torch.zeros(self.MAX_SEQUENCE_LENGTH)
+            token_type_ids = torch.zeros(self.MAX_SEQUENCE_LENGTH, dtype=torch.long)
         else:
             token_type_ids = idx_row['token_type_ids'].squeeze()
         attention_mask = idx_row['attention_mask'].squeeze()
