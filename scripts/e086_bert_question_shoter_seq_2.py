@@ -30,9 +30,9 @@ TOKENIZER_TYPE = 'bert'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
 MAX_EPOCH = 6
-MAX_SEQ_LEN = 512
+MAX_SEQ_LEN = 512 - 239 - 239 + 120
 T_MAX_LEN = 30
-Q_MAX_LEN = 239 * 2
+Q_MAX_LEN = 120
 A_MAX_LEN = 239 * 0
 DO_LOWER_CASE = True if MODEL_PRETRAIN == 'bert-base-uncased' else False
 
@@ -201,8 +201,7 @@ def main(args, logger):
                                                            trn_dataset.tokenizer),
                                                        MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
                                                        )
-        # optimizer = optim.Adam(model.parameters(), lr=3e-5)
-        optimizer = optim.SGD(model.parameters(), lr=3e-5, momentum=0.9, nesterov=True)
+        optimizer = optim.Adam(model.parameters(), lr=3e-5)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
 
