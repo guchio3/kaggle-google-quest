@@ -12,6 +12,7 @@ from torch.nn import BCEWithLogitsLoss, DataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
+from transformers import BertModel
 
 from refactor.datasets import QUESTDataset
 from refactor.models import BertModelForBinaryMultiLabelClassifier
@@ -24,7 +25,7 @@ EXP_ID = os.path.basename(__file__).split('_')[0]
 MNT_DIR = './mnt'
 DEVICE = 'cuda'
 MODEL_PRETRAIN = 'bert-base-uncased'
-MODEL_CONFIG_PATH = #'./mnt/datasets/model_con'
+MODEL_CONFIG_PATH = './mnt/datasets/model_configs/bert-model-uncased-config.pkl'
 TOKENIZER_TYPE = 'bert'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
