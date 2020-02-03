@@ -80,9 +80,10 @@ def test(model, fobj, loader, DEVICE, mode):
                 position_ids=position_ids
             )
             logits = outputs[0]
-            loss = fobj(logits, labels.float())
+            if mode != 'test':
+                loss = fobj(logits, labels.float())
 
-            running_loss += loss
+                running_loss += loss
 
             y_preds.append(torch.sigmoid(logits))
             y_trues.append(labels)
