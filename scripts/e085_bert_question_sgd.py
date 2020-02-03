@@ -202,7 +202,7 @@ def main(args, logger):
                                                        MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
                                                        )
         # optimizer = optim.Adam(model.parameters(), lr=3e-5)
-        optimizer = optim.SGD(model.parameters(), lr=3e-5, momentum=0.9, nesterov=True)
+        optimizer = optim.SGD(model.parameters(), lr=1e-2, momentum=0.9, nesterov=True)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
 
