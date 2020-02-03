@@ -86,7 +86,8 @@ class RobertaModelForBinaryMultiLabelClassifier(nn.Module):
     def __init__(self, num_labels, config_path, state_dict,
                  token_size=None, MAX_SEQUENCE_LENGTH=512):
         super(RobertaModelForBinaryMultiLabelClassifier, self).__init__()
-        config = RobertaConfig.from_pretrained(config_path)
+        with open(config_path, 'rb') as fin:
+            config = pickle.load(fin)
         self.model = RobertaModel(config)
         self.model.load_state_dict(state_dict)
         self.dropout = nn.Dropout(0.2)
@@ -161,7 +162,8 @@ class XLNetModelForBinaryMultiLabelClassifier(nn.Module):
     def __init__(self, num_labels, config_path, state_dict,
                  token_size=None, MAX_SEQUENCE_LENGTH=512):
         super(XLNetModelForBinaryMultiLabelClassifier, self).__init__()
-        config = XLNetConfig.from_pretrained(config_path)
+        with open(config_path, 'rb') as fin:
+            config = pickle.load(fin)
         self.model = XLNetModel(config)
         self.model.load_state_dict(state_dict)
         self.dropout = nn.Dropout(0.2)
