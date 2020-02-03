@@ -1,16 +1,17 @@
+import pickle
+
 import torch
 from torch import nn
-
-from transformers import BertConfig, BertModel
-from transformers import RobertaConfig, RobertaModel
-from transformers import XLNetConfig, XLNetModel
+from transformers import (BertConfig, BertModel, RobertaConfig, RobertaModel,
+                          XLNetConfig, XLNetModel)
 
 
 class BertModelForBinaryMultiLabelClassifier(nn.Module):
     def __init__(self, num_labels, config_path, state_dict,
                  token_size=None, MAX_SEQUENCE_LENGTH=512):
         super(BertModelForBinaryMultiLabelClassifier, self).__init__()
-        config = BertConfig.from_pretrained(config_path)
+        with open(config_path, 'rb') as fin:
+            config = pickle.load(fin)
         self.model = BertModel(config)
         self.model.load_state_dict(state_dict)
         self.dropout = nn.Dropout(0.2)

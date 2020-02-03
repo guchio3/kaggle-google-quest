@@ -189,7 +189,7 @@ def main(args, logger):
                                 pin_memory=True)
 
         fobj = BCEWithLogitsLoss()
-        state_dict = BertModel.from_pretrained('MODEL_PRETRAIN').state_dict()
+        state_dict = BertModel.from_pretrained(MODEL_PRETRAIN).state_dict()
         model = BertModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
                                                        config_path=MODEL_CONFIG_PATH,
                                                        state_dict=state_dict,
@@ -214,9 +214,9 @@ def main(args, logger):
                 model.freeze_unfreeze_bert(freeze=False, logger=logger)
             model = DataParallel(model)
             model = model.to(DEVICE)
-            trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader)
+            trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader, DEVICE)
             val_loss, val_metric, val_metric_raws, val_y_preds, val_y_trues, val_qa_ids = test(
-                model, fobj, val_loader)
+                model, fobj, val_loader, DEVICE)
 
             scheduler.step()
             if fold in histories['trn_loss']:
