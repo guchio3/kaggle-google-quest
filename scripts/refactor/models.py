@@ -195,11 +195,12 @@ class XLNetModelForBinaryMultiLabelClassifier(nn.Module):
         outputs = self.model(input_ids=input_ids,
                              attention_mask=attention_mask,
                              token_type_ids=token_type_ids,
-                             position_ids=position_ids,
+                             # position_ids=position_ids,
                              head_mask=head_mask,
                              inputs_embeds=inputs_embeds,
-                             encoder_hidden_states=encoder_hidden_states,
-                             encoder_attention_mask=encoder_attention_mask)
+                             # encoder_hidden_states=encoder_hidden_states,
+                             # encoder_attention_mask=encoder_attention_mask
+                             )
 
         pooled_output = torch.mean(outputs[0], dim=1)
 
