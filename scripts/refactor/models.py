@@ -89,16 +89,23 @@ class RobertaModelForBinaryMultiLabelClassifier(nn.Module):
         with open(config_path, 'rb') as fin:
             config = pickle.load(fin)
         self.model = RobertaModel(config)
-        self.model.load_state_dict(state_dict)
+        # only for roberta
+        if self.model.state_dict()['embeddings.token_type_embeddings.weight'].shape[0] == 1:
+            self.model.embeddings.token_type_embeddings = self._resize_embeddings(
+                self.model.embeddings.token_type_embeddings, 2)
+            self.model.load_state_dict(state_dict)
+        elif self.model.state_dict()['embeddings.token_type_embeddings.weight'].shape[0] == 1:
+            self.model.load_state_dict(state_dict)
+            self.model.embeddings.token_type_embeddings = self._resize_embeddings(
+                self.model.embeddings.token_type_embeddings, 2)
+        else:
+            raise NotImplementedError
         self.dropout = nn.Dropout(0.2)
         self.classifier = nn.Linear(self.model.config.hidden_size, num_labels)
 
         # resize
         if token_size:
             self.model.resize_token_embeddings(token_size)
-
-        self.model.embeddings.token_type_embeddings = self._resize_embeddings(
-            self.model.embeddings.token_type_embeddings, 2)
 
         # add modules
         self.add_module('my_fc_output', self.classifier)
