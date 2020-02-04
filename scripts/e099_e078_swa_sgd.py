@@ -11,6 +11,7 @@ from torch import optim
 from torch.nn import BCEWithLogitsLoss, DataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
+from torchcontrib.optim import SWA
 from tqdm import tqdm
 from transformers import BertModel
 
@@ -30,11 +31,9 @@ TOKENIZER_TYPE = 'bert'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
 MAX_EPOCH = 6
-MAX_SEQ_LEN = 512 - 239 - 239 + 350
-T_MAX_LEN = 30
-Q_MAX_LEN = 350
-A_MAX_LEN = 239 * 0
-DO_LOWER_CASE = True if MODEL_PRETRAIN == 'bert-base-uncased' else False
+MAX_SEQ_LEN = 512
+TQA_MODE = 'tq_a'
+RM_ZERO = True
 
 
 LABEL_COL = [
@@ -147,15 +146,16 @@ def main(args, logger):
             augment=[],
             tokenizer_type=TOKENIZER_TYPE,
             pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
-            do_lower_case=DO_LOWER_CASE,
+            do_lower_case=True,
             LABEL_COL=LABEL_COL,
-            t_max_len=T_MAX_LEN,
-            q_max_len=Q_MAX_LEN,
-            a_max_len=A_MAX_LEN,
-            tqa_mode='tq_a',
+            t_max_len=30,
+            q_max_len=239 * 2,
+            a_max_len=239 * 0,
+            tqa_mode=TQA_MODE,
             TBSEP='[TBSEP]',
             pos_id_type='arange',
             MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
+            rm_zero=RM_ZERO,
         )
         # update token
         trn_sampler = RandomSampler(data_source=trn_dataset)
@@ -173,15 +173,16 @@ def main(args, logger):
             augment=[],
             tokenizer_type=TOKENIZER_TYPE,
             pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
-            do_lower_case=DO_LOWER_CASE,
+            do_lower_case=True,
             LABEL_COL=LABEL_COL,
-            t_max_len=T_MAX_LEN,
-            q_max_len=Q_MAX_LEN,
-            a_max_len=A_MAX_LEN,
-            tqa_mode='tq_a',
+            t_max_len=30,
+            q_max_len=239 * 2,
+            a_max_len=239 * 0,
+            tqa_mode=TQA_MODE,
             TBSEP='[TBSEP]',
             pos_id_type='arange',
             MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
+            rm_zero=RM_ZERO,
         )
         val_sampler = RandomSampler(data_source=val_dataset)
         val_loader = DataLoader(val_dataset,
@@ -201,9 +202,11 @@ def main(args, logger):
                                                            trn_dataset.tokenizer),
                                                        MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
                                                        )
-        optimizer = optim.Adam(model.parameters(), lr=3e-5)
+        # optimizer = optim.Adam(model.parameters(), lr=3e-5)
+        optimizer = optim.SGD(model.parameters(), lr=1e-2)
+        optimizer = SWA(optimizer, swa_start=4, swa_freq=5, swa_lr=1e-3)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
+            optimizer, T_max=MAX_EPOCH, eta_min=1e-4)
 
         # load checkpoint model, optim, scheduler
         if args.checkpoint and fold == loaded_fold:
@@ -218,7 +221,7 @@ def main(args, logger):
                 model.freeze_unfreeze_bert(freeze=False, logger=logger)
             model = DataParallel(model)
             model = model.to(DEVICE)
-            trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader, DEVICE)
+            trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader, DEVICE, swa=True)
             val_loss, val_metric, val_metric_raws, val_y_preds, val_y_trues, val_qa_ids = test(
                 model, fobj, val_loader, DEVICE, mode='valid')
 

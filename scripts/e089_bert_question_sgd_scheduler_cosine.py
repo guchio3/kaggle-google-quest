@@ -30,9 +30,9 @@ TOKENIZER_TYPE = 'bert'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
 MAX_EPOCH = 6
-MAX_SEQ_LEN = 512 - 239 - 239 + 350
+MAX_SEQ_LEN = 512
 T_MAX_LEN = 30
-Q_MAX_LEN = 350
+Q_MAX_LEN = 239 * 2
 A_MAX_LEN = 239 * 0
 DO_LOWER_CASE = True if MODEL_PRETRAIN == 'bert-base-uncased' else False
 
@@ -201,9 +201,23 @@ def main(args, logger):
                                                            trn_dataset.tokenizer),
                                                        MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
                                                        )
-        optimizer = optim.Adam(model.parameters(), lr=3e-5)
+        # optimizer = optim.Adam(model.parameters(), lr=3e-5)
+        optimizer = optim.SGD(model.parameters(), lr=1e-2, momentum=0.9, nesterov=True)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
+            optimizer, T_max=MAX_EPOCH, eta_min=1e-4)
+        # scheduler = optim.lr_scheduler.MultiStepLR(
+        #     optimizer, milestones=[1, 3, 5], gamma=0.1)
+
+        # def func(epoch):
+        #     if epoch < 1:
+        #         return 0.1
+        #     elif epoch < 3:
+        #         return 0.01
+        #     elif epoch < 5:
+        #         return 0.0075
+        #     else:
+        #         return 0.001
+        # scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=func)
 
         # load checkpoint model, optim, scheduler
         if args.checkpoint and fold == loaded_fold:
