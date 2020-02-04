@@ -94,7 +94,7 @@ def main(args, logger):
     trn_df = clean_data(trn_df, ['question_title', 'question_body', 'answer'])
 
     # load additional tokens
-    with open('../mnt/inputs/nes_info/trn_over_10_vocab.pkl', 'rb') as fin:
+    with open('./mnt/inputs/nes_info/trn_over_10_vocab.pkl', 'rb') as fin:
         additional_tokens = pickle.load(fin)
 
     gkf = GroupKFold(
