@@ -12,7 +12,7 @@ class QUESTDataset(Dataset):
                  tokenizer_type, pretrained_model_name_or_path, do_lower_case,
                  LABEL_COL, t_max_len, q_max_len, a_max_len, tqa_mode,
                  TBSEP, pos_id_type, MAX_SEQUENCE_LENGTH=None,
-                 use_category=True, logger=None):
+                 use_category=True, rm_zero=False, logger=None):
         self.mode = mode
         self.augment = augment
         self.len = len(df)
@@ -27,6 +27,7 @@ class QUESTDataset(Dataset):
         else:
             raise NotImplementedError
         self.use_category = use_category
+        self.rm_zero = rm_zero
         self.logger = logger
         self.cat_dict = {
             'CAT_TECHNOLOGY'.casefold(): 0,
@@ -144,6 +145,15 @@ class QUESTDataset(Dataset):
                 answer = answer[:a_new_len // 2] + answer[-a_new_len // 2:]
             else:
                 answer = answer[:a_new_len]
+
+            if self._rm_zero:
+                if t_new_len == 0:
+                    title = []
+                if q_new_len == 0:
+                    question = []
+                if a_new_len == 0:
+                    answer = []
+
         return title, question, answer
 
     def __preprocess_text_row(self, row, t_max_len, q_max_len, a_max_len):
