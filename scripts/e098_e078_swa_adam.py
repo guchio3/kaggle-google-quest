@@ -203,7 +203,8 @@ def main(args, logger):
                                                        MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
                                                        )
         optimizer = optim.Adam(model.parameters(), lr=3e-5)
-        optimizer = SWA(optimizer, swa_start=4, swa_freq=5, swa_lr=1e-5)
+        # optimizer = SWA(optimizer, swa_start=4, swa_freq=5, swa_lr=1e-5)
+        optimizer = SWA(optimizer, swa_freq=5, swa_lr=1e-5)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
 
@@ -220,7 +221,10 @@ def main(args, logger):
                 model.freeze_unfreeze_bert(freeze=False, logger=logger)
             model = DataParallel(model)
             model = model.to(DEVICE)
-            trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader, DEVICE, swa=True)
+            trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader, DEVICE)
+            if epoch > 3:
+                optimizer.swap_swa_sgd()
+                optimizer.bn_update(trn_loader, model)
             val_loss, val_metric, val_metric_raws, val_y_preds, val_y_trues, val_qa_ids = test(
                 model, fobj, val_loader, DEVICE, mode='valid')
 

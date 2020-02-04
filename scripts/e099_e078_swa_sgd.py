@@ -203,10 +203,10 @@ def main(args, logger):
                                                        MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
                                                        )
         # optimizer = optim.Adam(model.parameters(), lr=3e-5)
-        optimizer = optim.SGD(model.parameters(), lr=1e-2)
-        optimizer = SWA(optimizer, swa_start=4, swa_freq=5, swa_lr=1e-3)
+        optimizer = optim.SGD(model.parameters(), lr=1e-1)
+        optimizer = SWA(optimizer, swa_start=4, swa_freq=5, swa_lr=1e-2)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=MAX_EPOCH, eta_min=1e-4)
+            optimizer, T_max=MAX_EPOCH, eta_min=1e-3)
 
         # load checkpoint model, optim, scheduler
         if args.checkpoint and fold == loaded_fold:
