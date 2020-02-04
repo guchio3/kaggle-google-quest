@@ -185,8 +185,8 @@ def main(args, logger):
             pos_id_type='arange',
             MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
             rm_zero=RM_ZERO,
-    )
-    val_sampler = RandomSampler(data_source=val_dataset)
+        )
+        val_sampler = RandomSampler(data_source=val_dataset)
         val_loader = DataLoader(val_dataset,
                                 batch_size=BATCH_SIZE,
                                 sampler=val_sampler,
