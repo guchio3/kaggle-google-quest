@@ -121,7 +121,8 @@ def load_checkpoint(cp_filename, model=None, optimizer=None, scheduler=None):
 
 def save_checkpoint(save_dir, model, optimizer, scheduler,
                     histories, val_y_preds, val_y_trues, val_qa_ids,
-                    current_fold, current_epoch, val_loss, val_metric):
+                    current_fold, current_epoch, val_loss, val_metric,
+                    tst_qa_ids=[], tst_y_preds=[]):
     if not os.path.exists(f'{save_dir}'):
         os.makedirs(f'{save_dir}')
     # pth means pytorch
@@ -138,6 +139,8 @@ def save_checkpoint(save_dir, model, optimizer, scheduler,
         'val_y_preds': val_y_preds,
         'val_y_trues': val_y_trues,
         'val_qa_ids': val_qa_ids,
+        'tst_qa_ids': tst_qa_ids,
+        'tst_y_preds': tst_y_preds,
     }
     sel_log(f'now saving checkpoint to {cp_filename} ...', None)
     torch.save(cp_dict, cp_filename)
