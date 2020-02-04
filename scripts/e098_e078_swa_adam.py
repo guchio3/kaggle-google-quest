@@ -204,7 +204,7 @@ def main(args, logger):
                                                        )
         optimizer = optim.Adam(model.parameters(), lr=3e-5)
         # optimizer = SWA(optimizer, swa_start=4, swa_freq=5, swa_lr=1e-5)
-        optimizer = SWA(optimizer, swa_freq=5, swa_lr=1e-5)
+        optimizer = SWA(optimizer, swa_start=2, swa_freq=5, swa_lr=3e-5)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
 
@@ -222,11 +222,13 @@ def main(args, logger):
             model = DataParallel(model)
             model = model.to(DEVICE)
             trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader, DEVICE)
-            if epoch > 3:
+            if epoch > 2:
                 optimizer.swap_swa_sgd()
                 optimizer.bn_update(trn_loader, model)
             val_loss, val_metric, val_metric_raws, val_y_preds, val_y_trues, val_qa_ids = test(
                 model, fobj, val_loader, DEVICE, mode='valid')
+            if epoch > 2:
+                optimizer.swap_swa_sgd()
 
             scheduler.step()
             if fold in histories['trn_loss']:
