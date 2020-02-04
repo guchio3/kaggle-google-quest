@@ -146,7 +146,7 @@ class QUESTDataset(Dataset):
             else:
                 answer = answer[:a_new_len]
 
-            if self._rm_zero:
+            if self.rm_zero:
                 if t_new_len == 0:
                     title = []
                 if q_new_len == 0:
