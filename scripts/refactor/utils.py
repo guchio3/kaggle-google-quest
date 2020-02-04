@@ -18,7 +18,7 @@ def compute_spearmanr(trues, preds):
     return rhos
 
 
-def train_one_epoch(model, fobj, optimizer, loader, DEVICE):
+def train_one_epoch(model, fobj, optimizer, loader, DEVICE, swa=False):
     model.train()
 
     running_loss = 0
@@ -49,6 +49,10 @@ def train_one_epoch(model, fobj, optimizer, loader, DEVICE):
 
         # store loss to culc epoch mean
         running_loss += loss
+    if swa:
+        print('now swa ing ...')
+        optimizer.swap_swa_sgd()
+        optimizer.bn_update(loader, model)
 
     loss_mean = running_loss / len(loader)
 

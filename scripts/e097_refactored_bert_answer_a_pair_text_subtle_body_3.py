@@ -31,41 +31,44 @@ TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
 MAX_EPOCH = 6
 MAX_SEQ_LEN = 512
+T_MAX_LEN = 30
+Q_MAX_LEN = 239
+A_MAX_LEN = 239
 TQA_MODE = 'tq_a'
 RM_ZERO = True
 
 
 LABEL_COL = [
-    'question_asker_intent_understanding',
-    'question_body_critical',
-    'question_conversational',
-    'question_expect_short_answer',
-    'question_fact_seeking',
-    'question_has_commonly_accepted_answer',
-    'question_interestingness_others',
-    'question_interestingness_self',
-    'question_multi_intent',
-    'question_not_really_a_question',
-    'question_opinion_seeking',
-    'question_type_choice',
-    'question_type_compare',
-    'question_type_consequence',
-    'question_type_definition',
-    'question_type_entity',
-    'question_type_instructions',
-    'question_type_procedure',
-    'question_type_reason_explanation',
-    'question_type_spelling',
-    'question_well_written',
-    #    'answer_helpful',
-    #    'answer_level_of_information',
-    #    'answer_plausible',
-    #    'answer_relevance',
-    #    'answer_satisfaction',
-    #    'answer_type_instructions',
-    #    'answer_type_procedure',
-    #    'answer_type_reason_explanation',
-    #    'answer_well_written'
+    # 'question_asker_intent_understanding',
+    # 'question_body_critical',
+    # 'question_conversational',
+    # 'question_expect_short_answer',
+    # 'question_fact_seeking',
+    # 'question_has_commonly_accepted_answer',
+    # 'question_interestingness_others',
+    # 'question_interestingness_self',
+    # 'question_multi_intent',
+    # 'question_not_really_a_question',
+    # 'question_opinion_seeking',
+    # 'question_type_choice',
+    # 'question_type_compare',
+    # 'question_type_consequence',
+    # 'question_type_definition',
+    # 'question_type_entity',
+    # 'question_type_instructions',
+    # 'question_type_procedure',
+    # 'question_type_reason_explanation',
+    # 'question_type_spelling',
+    # 'question_well_written',
+    'answer_helpful',
+    'answer_level_of_information',
+    'answer_plausible',
+    'answer_relevance',
+    'answer_satisfaction',
+    'answer_type_instructions',
+    'answer_type_procedure',
+    'answer_type_reason_explanation',
+    'answer_well_written'
 ]
 
 
@@ -147,9 +150,9 @@ def main(args, logger):
             pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
             do_lower_case=True,
             LABEL_COL=LABEL_COL,
-            t_max_len=30,
-            q_max_len=239 * 2,
-            a_max_len=239 * 0,
+            t_max_len=T_MAX_LEN,
+            q_max_len=Q_MAX_LEN,
+            a_max_len=A_MAX_LEN,
             tqa_mode=TQA_MODE,
             TBSEP='[TBSEP]',
             pos_id_type='arange',
@@ -174,9 +177,9 @@ def main(args, logger):
             pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
             do_lower_case=True,
             LABEL_COL=LABEL_COL,
-            t_max_len=30,
-            q_max_len=239 * 2,
-            a_max_len=239 * 0,
+            t_max_len=T_MAX_LEN,
+            q_max_len=Q_MAX_LEN,
+            a_max_len=A_MAX_LEN,
             tqa_mode=TQA_MODE,
             TBSEP='[TBSEP]',
             pos_id_type='arange',
@@ -218,7 +221,8 @@ def main(args, logger):
                 model.freeze_unfreeze_bert(freeze=False, logger=logger)
             model = DataParallel(model)
             model = model.to(DEVICE)
-            trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader, DEVICE)
+            trn_loss = train_one_epoch(
+                model, fobj, optimizer, trn_loader, DEVICE)
             val_loss, val_metric, val_metric_raws, val_y_preds, val_y_trues, val_qa_ids = test(
                 model, fobj, val_loader, DEVICE, mode='valid')
 
