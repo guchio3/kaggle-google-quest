@@ -29,7 +29,7 @@ MODEL_PRETRAIN = 'bert-base-uncased'
 MODEL_CONFIG_PATH = './mnt/datasets/model_configs/bert-model-uncased-config.pkl'
 TOKENIZER_TYPE = 'bert'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
-BATCH_SIZE = 24
+BATCH_SIZE = 20
 MAX_EPOCH = 6
 MAX_SEQ_LEN = 512
 T_MAX_LEN = 30
@@ -224,7 +224,6 @@ def main(args, logger):
             trn_dataset.tokenizer),
             MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
         )
-        del state_dict
         optimizer = optim.Adam(model.parameters(), lr=3e-5)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
