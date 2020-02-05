@@ -249,7 +249,7 @@ class XLNetModelForBinaryMultiLabelClassifier(nn.Module):
 class BertModelForBinaryMultiLabelClassifier2(nn.Module):
     def __init__(self, num_labels, config_path, q_state_dict, a_state_dict,
                  token_size=None, MAX_SEQUENCE_LENGTH=512):
-        super(BertModelForBinaryMultiLabelClassifier, self).__init__()
+        super(BertModelForBinaryMultiLabelClassifier2, self).__init__()
         with open(config_path, 'rb') as fin:
             config = pickle.load(fin)
         self.q_model = BertModel(config)
@@ -257,7 +257,7 @@ class BertModelForBinaryMultiLabelClassifier2(nn.Module):
         self.q_model.load_state_dict(q_state_dict)
         self.a_model.load_state_dict(a_state_dict)
         self.dropout = nn.Dropout(0.2)
-        self.classifier = nn.Linear(self.model.config.hidden_size*2, num_labels)
+        self.classifier = nn.Linear(self.q_model.config.hidden_size*2, num_labels)
 
         # resize
         if token_size:
@@ -308,19 +308,26 @@ class BertModelForBinaryMultiLabelClassifier2(nn.Module):
         return outputs  # logits, (hidden_states), (attentions)
 
     def resize_token_embeddings(self, token_num):
-        self.model.resize_token_embeddings(token_num)
+        self.q_model.resize_token_embeddings(token_num)
+        self.a_model.resize_token_embeddings(token_num)
 
     def freeze_unfreeze_bert(self, freeze=True, logger=None):
         if freeze:
             print('FREEZE bert model !', logger)
             # for name, child in self.model.module.named_children():
-            for name, child in self.model.named_children():
+            for name, child in self.q_model.named_children():
+                for param in child.parameters():
+                    param.requires_grad = False
+            for name, child in self.a_model.named_children():
                 for param in child.parameters():
                     param.requires_grad = False
         else:
             print('UNFREEZE bert model !', logger)
             # for name, child in self.model.module.named_children():
-            for name, child in self.model.named_children():
+            for name, child in self.q_model.named_children():
+                for param in child.parameters():
+                    param.requires_grad = True
+            for name, child in self.a_model.named_children():
                 for param in child.parameters():
                     param.requires_grad = True
 

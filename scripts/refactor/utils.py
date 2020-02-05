@@ -275,7 +275,7 @@ def train_one_epoch2(model, fobj, optimizer, loader, DEVICE, swa=False):
     return loss_mean
 
 
-def test(model, fobj, loader, DEVICE, mode):
+def test2(model, fobj, loader, DEVICE, mode):
     model.eval()
 
     with torch.no_grad():

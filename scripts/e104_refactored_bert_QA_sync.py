@@ -29,7 +29,7 @@ MODEL_PRETRAIN = 'bert-base-uncased'
 MODEL_CONFIG_PATH = './mnt/datasets/model_configs/bert-model-uncased-config.pkl'
 TOKENIZER_TYPE = 'bert'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
-BATCH_SIZE = 8
+BATCH_SIZE = 6
 MAX_EPOCH = 6
 MAX_SEQ_LEN = 512
 T_MAX_LEN = 30
@@ -106,10 +106,6 @@ def main(args, logger):
     # clean texts
     # trn_df = clean_data(trn_df, ['question_title', 'question_body', 'answer'])
 
-    # load additional tokens
-    with open('./mnt/inputs/nes_info/trn_over_10_vocab.pkl', 'rb') as fin:
-        additional_tokens = pickle.load(fin)
-
     gkf = GroupKFold(
         n_splits=5).split(
         X=trn_df.question_body,
@@ -160,7 +156,7 @@ def main(args, logger):
             'CAT_CULTURE'.casefold(),
             'CAT_SCIENCE'.casefold(),
             'CAT_LIFE_ARTS'.casefold(),
-        ] + additional_tokens
+        ]
 
         trn_dataset = QUESTDataset2(
             df=fold_trn_df,
