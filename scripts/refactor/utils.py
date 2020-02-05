@@ -1,4 +1,5 @@
 import re
+
 import numpy as np
 import torch
 from scipy.stats import spearmanr
@@ -133,7 +134,7 @@ mispell_dict = {"aren't": "are not",
                 "he'll": "he will",
                 "he's": "he is",
                 "i'd": "I would",
-#                "i'd": "I had",
+                #                "i'd": "I had",
                 "i'll": "I will",
                 "i'm": "I am",
                 "isn't": "is not",
@@ -221,3 +222,117 @@ def clean_data(df, columns: list):
         df[col] = df[col].apply(lambda x: replace_typical_misspell(x))
 
     return df
+
+
+def train_one_epoch2(model, fobj, optimizer, loader, DEVICE, swa=False):
+    model.train()
+
+    running_loss = 0
+    for (q_qa_id, q_input_ids, q_attention_mask,
+         q_token_type_ids, q_position_ids, q_labels, a_input_ids, a_attention_mask,
+         a_token_type_ids, a_position_ids, a_labels) in tqdm(loader):
+        # send them to DEVICE
+        q_input_ids = q_input_ids.to(DEVICE)
+        q_attention_mask = q_attention_mask.to(DEVICE)
+        q_token_type_ids = q_token_type_ids.to(DEVICE)
+        q_position_ids = q_position_ids.to(DEVICE)
+        a_input_ids = a_input_ids.to(DEVICE)
+        a_attention_mask = a_attention_mask.to(DEVICE)
+        a_token_type_ids = a_token_type_ids.to(DEVICE)
+        a_position_ids = a_position_ids.to(DEVICE)
+        labels = torch.cat([q_labels, a_labels], dim=1).to(DEVICE)
+
+        # forward
+        outputs = model(
+            q_input_ids=q_input_ids,
+            q_labels=q_labels,
+            q_attention_mask=q_attention_mask,
+            q_token_type_ids=q_token_type_ids,
+            q_position_ids=q_position_ids,
+            a_input_ids=a_input_ids,
+            a_labels=a_labels,
+            a_attention_mask=a_attention_mask,
+            a_token_type_ids=a_token_type_ids,
+            a_position_ids=a_position_ids
+        )
+        loss = fobj(outputs[0], labels.float())
+
+        # backword and update
+        optimizer.zero_grad()
+        loss.backward()
+
+        optimizer.step()
+
+        # store loss to culc epoch mean
+        running_loss += loss
+    if swa:
+        print('now swa ing ...')
+        optimizer.swap_swa_sgd()
+        optimizer.bn_update(loader, model)
+
+    loss_mean = running_loss / len(loader)
+
+    return loss_mean
+
+
+def test(model, fobj, loader, DEVICE, mode):
+    model.eval()
+
+    with torch.no_grad():
+        y_preds, y_trues, qa_ids = [], [], []
+
+        running_loss = 0
+        for (q_qa_id, q_input_ids, q_attention_mask,
+             q_token_type_ids, q_position_ids, q_labels, a_input_ids, a_attention_mask,
+             a_token_type_ids, a_position_ids, a_labels) in tqdm(loader):
+            # send them to DEVICE
+            q_input_ids = q_input_ids.to(DEVICE)
+            q_attention_mask = q_attention_mask.to(DEVICE)
+            q_token_type_ids = q_token_type_ids.to(DEVICE)
+            q_position_ids = q_position_ids.to(DEVICE)
+            a_input_ids = a_input_ids.to(DEVICE)
+            a_attention_mask = a_attention_mask.to(DEVICE)
+            a_token_type_ids = a_token_type_ids.to(DEVICE)
+            a_position_ids = a_position_ids.to(DEVICE)
+            labels = torch.cat([q_labels, a_labels], dim=1).to(DEVICE)
+            qa_id = q_qa_id
+
+            # forward
+            outputs = model(
+                q_input_ids=q_input_ids,
+                q_labels=q_labels,
+                q_attention_mask=q_attention_mask,
+                q_token_type_ids=q_token_type_ids,
+                q_position_ids=q_position_ids,
+                a_input_ids=a_input_ids,
+                a_labels=a_labels,
+                a_attention_mask=a_attention_mask,
+                a_token_type_ids=a_token_type_ids,
+                a_position_ids=a_position_ids
+            )
+            logits = outputs[0]
+            if mode != 'test':
+                loss = fobj(logits, labels.float())
+
+                running_loss += loss
+
+            y_preds.append(torch.sigmoid(logits))
+            y_trues.append(labels)
+            qa_ids.append(qa_id)
+
+        loss_mean = running_loss / len(loader)
+
+        y_preds = torch.cat(y_preds).to('cpu').numpy()
+        y_trues = torch.cat(y_trues).to('cpu').numpy()
+        qa_ids = torch.cat(qa_ids).to('cpu').numpy()
+
+        if mode == 'valid':
+            metric_raws = compute_spearmanr(y_trues, y_preds)
+            metric = np.mean(metric_raws)
+        elif mode != 'test':
+            raise NotImplementedError
+        else:
+            metric_raws = None
+            metric = None
+
+    return loss_mean, metric, metric_raws, y_preds, y_trues, qa_ids
