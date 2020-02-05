@@ -22,8 +22,6 @@ from utils import (load_checkpoint, logInit, parse_args,
                    save_and_clean_for_prediction, save_checkpoint, sel_log,
                    send_line_notification)
 
-torch.cuda.empty_cache()
-
 EXP_ID = os.path.basename(__file__).split('_')[0]
 MNT_DIR = './mnt'
 DEVICE = 'cuda'
@@ -31,7 +29,7 @@ MODEL_PRETRAIN = 'bert-base-uncased'
 MODEL_CONFIG_PATH = './mnt/datasets/model_configs/bert-model-uncased-config.pkl'
 TOKENIZER_TYPE = 'bert'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
-BATCH_SIZE = 10
+BATCH_SIZE = 24
 MAX_EPOCH = 6
 MAX_SEQ_LEN = 512
 T_MAX_LEN = 30
@@ -226,6 +224,7 @@ def main(args, logger):
             trn_dataset.tokenizer),
             MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
         )
+        del state_dict
         optimizer = optim.Adam(model.parameters(), lr=3e-5)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
@@ -301,7 +300,6 @@ def main(args, logger):
             trn_dataset.tokenizer,
             clean=False)
         del model
-        torch.cuda.empty_cache()
 
     # calc training stats
     fold_best_metric_mean = np.mean(fold_best_metrics)
