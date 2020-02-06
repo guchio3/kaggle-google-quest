@@ -7,7 +7,8 @@ from transformers import (BertConfig, BertModel, RobertaConfig, RobertaModel,
 
 
 class BertModelForBinaryMultiLabelClassifier(nn.Module):
-    def __init__(self, num_labels, config_path, state_dict, cat_last_layer_num=1,
+    def __init__(self, num_labels, config_path, state_dict,
+                 cat_last_layer_num=1, last_bn=False,
                  token_size=None, MAX_SEQUENCE_LENGTH=512):
         super(BertModelForBinaryMultiLabelClassifier, self).__init__()
         with open(config_path, 'rb') as fin:
@@ -18,6 +19,9 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
         self.classifier = nn.Linear(self.model.config.hidden_size*cat_last_layer_num, num_labels)
 
         self.cat_last_layer_num = cat_last_layer_num
+        self.last_bn = last_bn
+        if last_bn:
+            self.bn = nn.BatchNorm1d(self.model.config.hidden_size*cat_last_layer_num)
 
         # resize
         if token_size:
@@ -40,9 +44,18 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
                              encoder_hidden_states=encoder_hidden_states,
                              encoder_attention_mask=encoder_attention_mask)
 
-        pooled_output = torch.mean(outputs[0], dim=1)
+        if self.cat_last_layer_num > 1:
+            pooled_output = torch.cat(
+                    [torch.mean(outputs[2][-i-1], dim=1) for i in range(self.cat_last_layer_num)],
+                    dim=1)
+        else:
+            pooled_output = torch.mean(outputs[0], dim=1)
 
-        pooled_output = self.dropout(pooled_output)
+        if self.last_bn:
+            pooled_output = self.bn(pooled_output)
+        else:
+            pooled_output = self.dropout(pooled_output)
+
         logits = self.classifier(pooled_output)
 
         # add hidden states and attention if they are here
