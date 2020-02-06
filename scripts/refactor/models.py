@@ -14,7 +14,8 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
         with open(config_path, 'rb') as fin:
             config = pickle.load(fin)
         self.model = BertModel(config)
-        self.model.load_state_dict(state_dict)
+        if state_dict:
+            self.model.load_state_dict(state_dict)
         self.classifier = nn.Linear(self.model.config.hidden_size*cat_last_layer_num, num_labels)
 
         self.cat_last_layer_num = cat_last_layer_num
@@ -111,7 +112,8 @@ class RobertaModelForBinaryMultiLabelClassifier(nn.Module):
         with open(config_path, 'rb') as fin:
             config = pickle.load(fin)
         self.model = RobertaModel(config)
-        self.model.load_state_dict(state_dict)
+        if state_dict:
+            self.model.load_state_dict(state_dict)
         # # only for roberta
         # if self.model.state_dict()['embeddings.token_type_embeddings.weight'].shape[0] == 1:
         #     self.model.load_state_dict(state_dict)
@@ -147,12 +149,7 @@ class RobertaModelForBinaryMultiLabelClassifier(nn.Module):
                              encoder_hidden_states=encoder_hidden_states,
                              encoder_attention_mask=encoder_attention_mask)
 
-        if self.cat_last_layer_num > 1:
-            pooled_output = torch.cat(
-                    [torch.mean(outputs[2][-i-1], dim=1) for i in range(self.cat_last_layer_num)],
-                    dim=1)
-        else:
-            pooled_output = torch.mean(outputs[0], dim=1)
+        pooled_output = torch.mean(outputs[0], dim=1)
 
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
@@ -203,7 +200,8 @@ class XLNetModelForBinaryMultiLabelClassifier(nn.Module):
         with open(config_path, 'rb') as fin:
             config = pickle.load(fin)
         self.model = XLNetModel(config)
-        self.model.load_state_dict(state_dict)
+        if state_dict:
+            self.model.load_state_dict(state_dict)
         self.dropout = nn.Dropout(0.2)
         self.classifier = nn.Linear(self.model.config.d_model, num_labels)
 
