@@ -39,7 +39,7 @@ Q_MAX_LEN = 239 * 2
 A_MAX_LEN = 239 * 0
 DO_LOWER_CASE = True if MODEL_PRETRAIN == 'bert-base-uncased' else False
 TQA_MODE = 'tq_a'
-LAST_BN = True
+LAST_BN = False
 
 
 LABEL_COL = [
