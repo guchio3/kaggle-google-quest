@@ -8,7 +8,7 @@ from transformers import (BertConfig, BertModel, RobertaConfig, RobertaModel,
 
 class BertModelForBinaryMultiLabelClassifier(nn.Module):
     def __init__(self, num_labels, config_path, state_dict,
-                 cat_last_layer_num=1, last_bn=False,
+                 cat_last_layer_num=1, last_bn=False, do_ratio=0.2,
                  token_size=None, MAX_SEQUENCE_LENGTH=512):
         super(BertModelForBinaryMultiLabelClassifier, self).__init__()
         with open(config_path, 'rb') as fin:
@@ -22,7 +22,7 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
         if last_bn:
             self.bn = nn.BatchNorm1d(self.model.config.hidden_size*cat_last_layer_num)
         else:
-            self.dropout = nn.Dropout(0.2)
+            self.dropout = nn.Dropout(do_ratio)
 
         # resize
         if token_size:
