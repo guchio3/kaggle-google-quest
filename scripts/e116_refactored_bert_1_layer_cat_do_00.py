@@ -212,9 +212,9 @@ def main(args, logger):
                                                            trn_dataset.tokenizer),
                                                        MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
                                                        cat_last_layer_num=1,
-                                                       do_ratio=0.5,
+                                                       do_ratio=0.0,
                                                        )
-        optimizer = optim.Adam(model.parameters(), lr=3e-5, weight_decay=0.001)
+        optimizer = optim.Adam(model.parameters(), lr=3e-5)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
 
