@@ -8,7 +8,7 @@ from transformers import (BertConfig, BertModel, RobertaConfig, RobertaModel,
 
 class BertModelForBinaryMultiLabelClassifier(nn.Module):
     def __init__(self, num_labels, config_path, state_dict,
-                 cat_last_layer_num=1, last_bn=False, do_ratio=0.2,
+                 cat_last_layer_num=1, last_bn=False, do_ratio=0.2, head_tail=False,
                  token_size=None, MAX_SEQUENCE_LENGTH=512):
         super(BertModelForBinaryMultiLabelClassifier, self).__init__()
         with open(config_path, 'rb') as fin:
@@ -19,6 +19,7 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
 
         self.cat_last_layer_num = cat_last_layer_num
         self.last_bn = last_bn
+        self.head_tail = head_tail
         if last_bn:
             self.bn = nn.BatchNorm1d(self.model.config.hidden_size*cat_last_layer_num)
         else:
@@ -46,9 +47,14 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
                              encoder_attention_mask=encoder_attention_mask)
 
         if self.cat_last_layer_num > 1:
-            pooled_output = torch.cat(
-                    [torch.mean(outputs[2][-i-1], dim=1) for i in range(self.cat_last_layer_num)],
-                    dim=1)
+            if self.head_tail:
+                pooled_output = torch.cat(
+                        [torch.mean(outputs[2][-i-1+2], dim=1) for i in range(self.cat_last_layer_num)],
+                        dim=1)
+            else:
+                pooled_output = torch.cat(
+                        [torch.mean(outputs[2][-i-1], dim=1) for i in range(self.cat_last_layer_num)],
+                        dim=1)
         else:
             pooled_output = torch.mean(outputs[0], dim=1)
 
