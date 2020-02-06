@@ -15,13 +15,14 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
             config = pickle.load(fin)
         self.model = BertModel(config)
         self.model.load_state_dict(state_dict)
-        self.dropout = nn.Dropout(0.2)
         self.classifier = nn.Linear(self.model.config.hidden_size*cat_last_layer_num, num_labels)
 
         self.cat_last_layer_num = cat_last_layer_num
         self.last_bn = last_bn
         if last_bn:
             self.bn = nn.BatchNorm1d(self.model.config.hidden_size*cat_last_layer_num)
+        else:
+            self.dropout = nn.Dropout(0.2)
 
         # resize
         if token_size:
