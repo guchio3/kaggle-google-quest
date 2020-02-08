@@ -141,6 +141,7 @@ def main(args, logger):
             ['is_original', 'question_body_le'], axis=1)
         if args.debug:
             fold_trn_df = fold_trn_df.sample(100, random_state=71)
+            trn_df = trn_df.sample(100, random_state=71)
             fold_val_df = fold_val_df.sample(100, random_state=71)
         temp = pd.Series(list(itertools.chain.from_iterable(
             fold_trn_df.question_title.apply(lambda x: x.split(' ')) +
@@ -211,17 +212,17 @@ def main(args, logger):
             else:
                 histories['trn_loss'][fold] = [trn_loss, ]
             if fold in histories['val_loss']:
-                histories['val_loss'][fold].append(None)
+                histories['val_loss'][fold].append(trn_loss)
             else:
-                histories['val_loss'][fold] = [None, ]
+                histories['val_loss'][fold] = [trn_loss, ]
             if fold in histories['val_metric']:
-                histories['val_metric'][fold].append(None)
+                histories['val_metric'][fold].append(trn_loss)
             else:
-                histories['val_metric'][fold] = [None, ]
+                histories['val_metric'][fold] = [trn_loss, ]
             if fold in histories['val_metric_raws']:
-                histories['val_metric_raws'][fold].append(None)
+                histories['val_metric_raws'][fold].append(trn_loss)
             else:
-                histories['val_metric_raws'][fold] = [None, ]
+                histories['val_metric_raws'][fold] = [trn_loss, ]
 
             sel_log(
                 f'fold : {fold} -- epoch : {epoch} -- '
@@ -235,13 +236,13 @@ def main(args, logger):
                 optimizer,
                 scheduler,
                 histories,
-                None,
-                None,
-                None,
+                [],
+                [],
+                [],
                 fold,
                 epoch,
-                None,
-                None,
+                trn_loss,
+                trn_loss,
                 )
         save_and_clean_for_prediction(
             f'{MNT_DIR}/checkpoints/{EXP_ID}/{fold}',
