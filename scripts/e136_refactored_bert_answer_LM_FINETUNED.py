@@ -36,43 +36,43 @@ BATCH_SIZE = 8
 MAX_EPOCH = 6
 MAX_SEQ_LEN = 512
 T_MAX_LEN = 30
-Q_MAX_LEN = 239 * 2
-A_MAX_LEN = 239 * 0
+Q_MAX_LEN = 239 * 0
+A_MAX_LEN = 239 * 2
 DO_LOWER_CASE = True if MODEL_PRETRAIN == 'bert-base-uncased' else False
 TQA_MODE = 'tq_a'
 
 
 LABEL_COL = [
-    'question_asker_intent_understanding',
-    'question_body_critical',
-    'question_conversational',
-    'question_expect_short_answer',
-    'question_fact_seeking',
-    'question_has_commonly_accepted_answer',
-    'question_interestingness_others',
-    'question_interestingness_self',
-    'question_multi_intent',
-    'question_not_really_a_question',
-    'question_opinion_seeking',
-    'question_type_choice',
-    'question_type_compare',
-    'question_type_consequence',
-    'question_type_definition',
-    'question_type_entity',
-    'question_type_instructions',
-    'question_type_procedure',
-    'question_type_reason_explanation',
-    'question_type_spelling',
-    'question_well_written',
-    #    'answer_helpful',
-    #    'answer_level_of_information',
-    #    'answer_plausible',
-    #    'answer_relevance',
-    #    'answer_satisfaction',
-    #    'answer_type_instructions',
-    #    'answer_type_procedure',
-    #    'answer_type_reason_explanation',
-    #    'answer_well_written'
+    # 'question_asker_intent_understanding',
+    # 'question_body_critical',
+    # 'question_conversational',
+    # 'question_expect_short_answer',
+    # 'question_fact_seeking',
+    # 'question_has_commonly_accepted_answer',
+    # 'question_interestingness_others',
+    # 'question_interestingness_self',
+    # 'question_multi_intent',
+    # 'question_not_really_a_question',
+    # 'question_opinion_seeking',
+    # 'question_type_choice',
+    # 'question_type_compare',
+    # 'question_type_consequence',
+    # 'question_type_definition',
+    # 'question_type_entity',
+    # 'question_type_instructions',
+    # 'question_type_procedure',
+    # 'question_type_reason_explanation',
+    # 'question_type_spelling',
+    # 'question_well_written',
+    'answer_helpful',
+    'answer_level_of_information',
+    'answer_plausible',
+    'answer_relevance',
+    'answer_satisfaction',
+    'answer_type_instructions',
+    'answer_type_procedure',
+    'answer_type_reason_explanation',
+    'answer_well_written'
 ]
 
 
@@ -212,7 +212,7 @@ def main(args, logger):
 
         fobj = BCEWithLogitsLoss()
         # state_dict = BertModel.from_pretrained(MODEL_PRETRAIN).state_dict()
-        state_dict = torch.load('./mnt/datasets/MLM_pretrained_weights/e132_best.pth')['state_dict']
+        state_dict = torch.load('mnt/datasets/MLM_pretrained_weights/e133_best.pth')['state_dict']
         model = BertModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
                                                        config_path=MODEL_CONFIG_PATH,
                                                        state_dict=state_dict,
