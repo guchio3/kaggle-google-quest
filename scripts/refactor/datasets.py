@@ -85,6 +85,8 @@ class QUESTDataset(Dataset):
 
         if self.pos_id_type == 'arange':
             position_ids = torch.arange(self.MAX_SEQUENCE_LENGTH)
+        elif self.pos_id_type == 'all_one':
+            position_ids = torch.ones(self.MAX_SEQUENCE_LENGTH, dtype=torch.long)
         # elif self.pos_id_type == 'tq_a_sep':
         #     position_ids = torch.cat([
         #         torch.arange(self.t_max_len+self.q_max_len+3),
