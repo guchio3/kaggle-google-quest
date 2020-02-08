@@ -336,3 +336,45 @@ def test2(model, fobj, loader, DEVICE, mode):
             metric = None
 
     return loss_mean, metric, metric_raws, y_preds, y_trues, qa_ids
+
+
+def train_one_epoch_ML(model, optimizer, loader, DEVICE, swa=False):
+    model.train()
+
+    running_loss = 0
+    for (qa_id, input_ids, attention_mask,
+         token_type_ids, position_ids, labels) in tqdm(loader):
+        # send them to DEVICE
+        input_ids = input_ids.to(DEVICE)
+        attention_mask = attention_mask.to(DEVICE)
+        token_type_ids = token_type_ids.to(DEVICE)
+        position_ids = position_ids.to(DEVICE)
+        labels = labels.to(DEVICE)
+
+        # forward
+        outputs = model(
+            input_ids=input_ids,
+            masked_lm_labels=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids
+        )
+        loss, prediction_scores = outputs[:2]
+
+        # backword and update
+        optimizer.zero_grad()
+        loss.backward()
+
+        optimizer.step()
+
+        # store loss to culc epoch mean
+        running_loss += loss
+    if swa:
+        print('now swa ing ...')
+        optimizer.swap_swa_sgd()
+        optimizer.bn_update(loader, model)
+
+    loss_mean = running_loss / len(loader)
+
+    return loss_mean
+
