@@ -212,7 +212,7 @@ def main(args, logger):
 
         fobj = BCEWithLogitsLoss()
         # state_dict = BertModel.from_pretrained(MODEL_PRETRAIN).state_dict()
-        state_dict = torch.load('mnt/datasets/MLM_pretrained_weights/e133_best.pth')['state_dict']
+        state_dict = torch.load('mnt/datasets/MLM_pretrained_weights/e133_best.pth')
         model = BertModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
                                                        config_path=MODEL_CONFIG_PATH,
                                                        state_dict=state_dict,
