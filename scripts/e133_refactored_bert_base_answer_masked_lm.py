@@ -91,6 +91,8 @@ seed_everything()
 def main(args, logger):
     # trn_df = pd.read_csv(f'{MNT_DIR}/inputs/origin/train.csv')
     trn_df = pd.read_pickle(f'{MNT_DIR}/inputs/nes_info/trn_df.pkl')
+    tst_df = pd.read_csv(f'{MNT_DIR}/inputs/origin/test.csv')
+    trn_df = pd.concat([trn_df, tst_df], axis=0).fillna(-1)
     trn_df['is_original'] = 1
     # raw_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/raw_pseudo_tst_df.csv')
     # half_opt_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/half_opt_pseudo_tst_df.csv')
