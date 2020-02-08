@@ -123,6 +123,8 @@ def main(args, logger):
     fold_best_metrics = []
     fold_best_metrics_raws = []
     for fold, (trn_idx, val_idx) in enumerate(gkf):
+        if fold > 0:
+            break
         if fold < loaded_fold:
             fold_best_metrics.append(np.max(histories["val_metric"][fold]))
             fold_best_metrics_raws.append(
@@ -155,6 +157,7 @@ def main(args, logger):
             'CAT_LIFE_ARTS'.casefold(),
         ]#  + additional_tokens
 
+        fold_trn_df = trn_df.drop(['is_original', 'question_body_le'], axis=1)
         # fold_trn_df = pd.concat([fold_trn_df, raw_pseudo_df, opt_pseudo_df, half_opt_pseudo_df], axis=0)
 
         trn_dataset = QUESTDataset(
