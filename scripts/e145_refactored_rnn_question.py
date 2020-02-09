@@ -24,6 +24,7 @@ from utils import (load_checkpoint, logInit, parse_args,
 EXP_ID = os.path.basename(__file__).split('_')[0]
 MNT_DIR = './mnt'
 DEVICE = 'cuda'
+# DEVICE = 'cpu'
 MODEL_PRETRAIN = 'bert-base-uncased'
 TOKENIZER_TYPE = 'bert'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
@@ -199,9 +200,9 @@ def main(args, logger):
                                                            trn_dataset.tokenizer),
                                                        MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
                                                        )
-        optimizer = optim.Adam(model.parameters(), lr=3e-5)
+        optimizer = optim.Adam(model.parameters(), lr=3e-4)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
+            optimizer, T_max=MAX_EPOCH, eta_min=1e-4)
 
         # load checkpoint model, optim, scheduler
         if args.checkpoint and fold == loaded_fold:
@@ -211,9 +212,9 @@ def main(args, logger):
             if fold <= loaded_fold and epoch <= loaded_epoch:
                 continue
             if epoch < 1:
-                model.freeze_unfreeze_bert(freeze=True, logger=logger)
+                model.freeze_unfreeze_rnn_embeddings(freeze=True, logger=logger)
             else:
-                model.freeze_unfreeze_bert(freeze=False, logger=logger)
+                model.freeze_unfreeze_rnn_embeddings(freeze=False, logger=logger)
             model = DataParallel(model)
             model = model.to(DEVICE)
             trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader, DEVICE)

@@ -405,15 +405,21 @@ class RNNModelForBinaryMultiLabelClassifier(nn.Module):
         super(RNNModelForBinaryMultiLabelClassifier, self).__init__()
         self.lstm_hidden_size = 120
         self.gru_hidden_size = 60
-        self.embeddings = nn.Embedding((30522, 768)).load_state_dict()
+        self.embeddings = nn.Embedding(30522, 768)
+        self.embeddings.weight = self.embeddings.weight = nn.Parameter(state_dict['word_embeddings.weight'])
         self.lstm = nn.LSTM(
             768,
-            lstm_hidden_size,
+            self.lstm_hidden_size,
+            bidirectional=True,
+            batch_first=True)
+        self.lstm2 = nn.LSTM(
+            self.lstm_hidden_size * 2,
+            self.lstm_hidden_size,
             bidirectional=True,
             batch_first=True)
         self.gru = nn.GRU(
-            lstm_hidden_size * 2,
-            gru_hidden_size,
+            self.lstm_hidden_size * 2,
+            self.gru_hidden_size,
             bidirectional=True,
             batch_first=True)
         self.embedding_dropout = nn.Dropout2d(0.2)
@@ -448,14 +454,16 @@ class RNNModelForBinaryMultiLabelClassifier(nn.Module):
         avg_pool = torch.mean(h_gru, 1)
         max_pool, _ = torch.max(h_gru, 1)
 
-        pooled_outpu = ttorch.cat(
-            self.dropout(
-                (hh_gru, avg_pool, max_pool)), 1)
+        hh_gru = self.dropout(hh_gru)
+        avg_pool = self.dropout(avg_pool)
+        max_pool = self.dropout(max_pool)
+
+        pooled_output = torch.cat((hh_gru, avg_pool, max_pool), 1)
 
         logits = self.classifier(pooled_output)
 
         # add hidden states and attention if they are here
-        outputs = (logits,) + outputs[2:]
+        outputs = (logits,)
 
         return outputs  # logits, (hidden_states), (attentions)
 
@@ -468,7 +476,7 @@ class RNNModelForBinaryMultiLabelClassifier(nn.Module):
         else:
             print('UNFREEZE rnn embeddings !', logger)
             # for name, child in self.model.module.named_children():
-            self.embeddings.requires_grad = False
+            self.embeddings.requires_grad = True
 
     def _resize_embeddings(self, old_embeddings, new_num_tokens):
         old_num_tokens, old_embedding_dim = old_embeddings.weight.size()
