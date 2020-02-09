@@ -85,6 +85,10 @@ def main(args, logger):
     # trn_df = pd.read_csv(f'{MNT_DIR}/inputs/origin/train.csv')
     trn_df = pd.read_pickle(f'{MNT_DIR}/inputs/nes_info/trn_df.pkl')
     trn_df['is_original'] = 1
+    raw_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/raw_pseudo_tst_df.csv')
+    half_opt_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/half_opt_pseudo_tst_df.csv')
+    opt_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/opt_pseudo_tst_df.csv')
+
 
     gkf = GroupKFold(
         n_splits=5).split(
@@ -137,6 +141,8 @@ def main(args, logger):
             'CAT_SCIENCE'.casefold(),
             'CAT_LIFE_ARTS'.casefold(),
         ]
+
+        fold_trn_df = pd.concat([fold_trn_df, raw_pseudo_df, opt_pseudo_df, half_opt_pseudo_df], axis=0)
 
         trn_dataset = QUESTDataset(
             df=fold_trn_df,

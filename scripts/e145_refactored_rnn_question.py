@@ -12,11 +12,11 @@ from torch.nn import BCEWithLogitsLoss, DataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
-from transformers import BertModel
 
 from refactor.datasets import QUESTDataset
 from refactor.models import RNNModelForBinaryMultiLabelClassifier
 from refactor.utils import compute_spearmanr, test, train_one_epoch
+from transformers import BertModel
 from utils import (load_checkpoint, logInit, parse_args,
                    save_and_clean_for_prediction, save_checkpoint, sel_log,
                    send_line_notification)
@@ -31,6 +31,8 @@ TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
 MAX_EPOCH = 6
 MAX_SEQ_LEN = 512
+Q_MAX_LEN = 239 * 2
+A_MAX_LEN = 239 * 0
 TQA_MODE = 'tq_a'
 RM_ZERO = True
 
@@ -85,6 +87,10 @@ def main(args, logger):
     # trn_df = pd.read_csv(f'{MNT_DIR}/inputs/origin/train.csv')
     trn_df = pd.read_pickle(f'{MNT_DIR}/inputs/nes_info/trn_df.pkl')
     trn_df['is_original'] = 1
+    raw_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/raw_pseudo_tst_df.csv')
+    half_opt_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/half_opt_pseudo_tst_df.csv')
+    opt_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/opt_pseudo_tst_df.csv')
+
 
     gkf = GroupKFold(
         n_splits=5).split(
@@ -138,6 +144,8 @@ def main(args, logger):
             'CAT_LIFE_ARTS'.casefold(),
         ]
 
+        fold_trn_df = pd.concat([fold_trn_df, raw_pseudo_df, opt_pseudo_df, half_opt_pseudo_df], axis=0)
+
         trn_dataset = QUESTDataset(
             df=fold_trn_df,
             mode='train',
@@ -148,8 +156,8 @@ def main(args, logger):
             do_lower_case=True,
             LABEL_COL=LABEL_COL,
             t_max_len=30,
-            q_max_len=239 * 2,
-            a_max_len=239 * 0,
+            q_max_len=Q_MAX_LEN,
+            a_max_len=A_MAX_LEN,
             tqa_mode=TQA_MODE,
             TBSEP='[TBSEP]',
             pos_id_type='all_one',
@@ -175,8 +183,8 @@ def main(args, logger):
             do_lower_case=True,
             LABEL_COL=LABEL_COL,
             t_max_len=30,
-            q_max_len=239 * 2,
-            a_max_len=239 * 0,
+            q_max_len=Q_MAX_LEN,
+            a_max_len=A_MAX_LEN,
             tqa_mode=TQA_MODE,
             TBSEP='[TBSEP]',
             pos_id_type='all_one',
@@ -193,13 +201,14 @@ def main(args, logger):
                                 pin_memory=True)
 
         fobj = BCEWithLogitsLoss()
-        state_dict = BertModel.from_pretrained(MODEL_PRETRAIN).embeddings.state_dict()
+        state_dict = BertModel.from_pretrained(
+            MODEL_PRETRAIN).embeddings.state_dict()
         model = RNNModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
-                                                       state_dict=state_dict,
-                                                       token_size=len(
-                                                           trn_dataset.tokenizer),
-                                                       MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
-                                                       )
+                                                      state_dict=state_dict,
+                                                      token_size=len(
+            trn_dataset.tokenizer),
+            MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
+        )
         optimizer = optim.Adam(model.parameters(), lr=3e-4)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=MAX_EPOCH, eta_min=1e-4)
@@ -212,12 +221,15 @@ def main(args, logger):
             if fold <= loaded_fold and epoch <= loaded_epoch:
                 continue
             if epoch < 1:
-                model.freeze_unfreeze_rnn_embeddings(freeze=True, logger=logger)
+                model.freeze_unfreeze_rnn_embeddings(
+                    freeze=True, logger=logger)
             else:
-                model.freeze_unfreeze_rnn_embeddings(freeze=False, logger=logger)
+                model.freeze_unfreeze_rnn_embeddings(
+                    freeze=False, logger=logger)
             model = DataParallel(model)
             model = model.to(DEVICE)
-            trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader, DEVICE)
+            trn_loss = train_one_epoch(
+                model, fobj, optimizer, trn_loader, DEVICE)
             val_loss, val_metric, val_metric_raws, val_y_preds, val_y_trues, val_qa_ids = test(
                 model, fobj, val_loader, DEVICE, mode='valid')
 
