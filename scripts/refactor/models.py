@@ -137,10 +137,10 @@ class RobertaModelForBinaryMultiLabelClassifier(nn.Module):
         if token_size:
             self.model.resize_token_embeddings(token_size)
 
-        if self.model.embeddings.position_embeddings.weight.size()[0] != MAX_SEQUENCE_LENGTH:
-            # define input embedding and transformers
-            self.model.embeddings.position_embeddings = self._resize_embeddings(
-                self.model.embeddings.position_embeddings, MAX_SEQUENCE_LENGTH)
+        # if self.model.embeddings.position_embeddings.weight.size()[0] != MAX_SEQUENCE_LENGTH:
+        #     # define input embedding and transformers
+        #     self.model.embeddings.position_embeddings = self._resize_embeddings(
+        #         self.model.embeddings.position_embeddings, MAX_SEQUENCE_LENGTH)
 
         # add modules
         self.add_module('my_fc_output', self.classifier)
@@ -219,10 +219,10 @@ class XLNetModelForBinaryMultiLabelClassifier(nn.Module):
         if token_size:
             self.model.resize_token_embeddings(token_size)
 
-        if self.model.embeddings.position_embeddings.weight.size()[0] != MAX_SEQUENCE_LENGTH:
-            # define input embedding and transformers
-            self.model.embeddings.position_embeddings = self._resize_embeddings(
-                self.model.embeddings.position_embeddings, MAX_SEQUENCE_LENGTH)
+        # if self.model.embeddings.position_embeddings.weight.size()[0] != MAX_SEQUENCE_LENGTH:
+        #     # define input embedding and transformers
+        #     self.model.embeddings.position_embeddings = self._resize_embeddings(
+        #         self.model.embeddings.position_embeddings, MAX_SEQUENCE_LENGTH)
 
         # add modules
         self.add_module('my_fc_output', self.classifier)
