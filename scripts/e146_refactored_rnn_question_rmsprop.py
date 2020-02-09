@@ -1,9 +1,7 @@
-import pickle
 import itertools
 import os
 import random
 from logging import getLogger
-import html
 
 import numpy as np
 import pandas as pd
@@ -14,11 +12,11 @@ from torch.nn import BCEWithLogitsLoss, DataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
-from transformers import RobertaModel
+from transformers import BertModel
 
 from refactor.datasets import QUESTDataset
-from refactor.models import RobertaModelForBinaryMultiLabelClassifier
-from refactor.utils import compute_spearmanr, test, train_one_epoch, clean_data
+from refactor.models import RNNModelForBinaryMultiLabelClassifier
+from refactor.utils import compute_spearmanr, test, train_one_epoch
 from utils import (load_checkpoint, logInit, parse_args,
                    save_and_clean_for_prediction, save_checkpoint, sel_log,
                    send_line_notification)
@@ -27,52 +25,47 @@ EXP_ID = os.path.basename(__file__).split('_')[0]
 MNT_DIR = './mnt'
 DEVICE = 'cuda'
 # DEVICE = 'cpu'
-MODEL_PRETRAIN = 'roberta-base'
-# MODEL_CONFIG_PATH = './mnt/datasets/model_configs/bert-model-uncased-config.pkl'
-MODEL_CONFIG_PATH = './mnt/datasets/model_configs/roberta-model-base-config.pkl'
-TOKENIZER_TYPE = 'roberta'
-TOKENIZER_PRETRAIN = 'roberta-base'
+MODEL_PRETRAIN = 'bert-base-uncased'
+TOKENIZER_TYPE = 'bert'
+TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
 MAX_EPOCH = 6
 MAX_SEQ_LEN = 512
-T_MAX_LEN = 30
-Q_MAX_LEN = 239 * 0
-A_MAX_LEN = 239 * 2
-DO_LOWER_CASE = True if MODEL_PRETRAIN == 'bert-base-uncased' else False
 TQA_MODE = 'tq_a'
+RM_ZERO = True
 
 
 LABEL_COL = [
-    # 'question_asker_intent_understanding',
-    # 'question_body_critical',
-    # 'question_conversational',
-    # 'question_expect_short_answer',
-    # 'question_fact_seeking',
-    # 'question_has_commonly_accepted_answer',
-    # 'question_interestingness_others',
-    # 'question_interestingness_self',
-    # 'question_multi_intent',
-    # 'question_not_really_a_question',
-    # 'question_opinion_seeking',
-    # 'question_type_choice',
-    # 'question_type_compare',
-    # 'question_type_consequence',
-    # 'question_type_definition',
-    # 'question_type_entity',
-    # 'question_type_instructions',
-    # 'question_type_procedure',
-    # 'question_type_reason_explanation',
-    # 'question_type_spelling',
-    # 'question_well_written',
-    'answer_helpful',
-    'answer_level_of_information',
-    'answer_plausible',
-    'answer_relevance',
-    'answer_satisfaction',
-    'answer_type_instructions',
-    'answer_type_procedure',
-    'answer_type_reason_explanation',
-    'answer_well_written'
+    'question_asker_intent_understanding',
+    'question_body_critical',
+    'question_conversational',
+    'question_expect_short_answer',
+    'question_fact_seeking',
+    'question_has_commonly_accepted_answer',
+    'question_interestingness_others',
+    'question_interestingness_self',
+    'question_multi_intent',
+    'question_not_really_a_question',
+    'question_opinion_seeking',
+    'question_type_choice',
+    'question_type_compare',
+    'question_type_consequence',
+    'question_type_definition',
+    'question_type_entity',
+    'question_type_instructions',
+    'question_type_procedure',
+    'question_type_reason_explanation',
+    'question_type_spelling',
+    'question_well_written',
+    #    'answer_helpful',
+    #    'answer_level_of_information',
+    #    'answer_plausible',
+    #    'answer_relevance',
+    #    'answer_satisfaction',
+    #    'answer_type_instructions',
+    #    'answer_type_procedure',
+    #    'answer_type_reason_explanation',
+    #    'answer_well_written'
 ]
 
 
@@ -92,17 +85,6 @@ def main(args, logger):
     # trn_df = pd.read_csv(f'{MNT_DIR}/inputs/origin/train.csv')
     trn_df = pd.read_pickle(f'{MNT_DIR}/inputs/nes_info/trn_df.pkl')
     trn_df['is_original'] = 1
-
-    # raw_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/raw_pseudo_tst_df.csv')
-    # half_opt_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/half_opt_pseudo_tst_df.csv')
-    # opt_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/opt_pseudo_tst_df.csv')
-
-    # clean texts
-    # trn_df = clean_data(trn_df, ['question_title', 'question_body', 'answer'])
-
-    # load additional tokens
-    # with open('./mnt/inputs/nes_info/trn_over_10_vocab.pkl', 'rb') as fin:
-    #     additional_tokens = pickle.load(fin)
 
     gkf = GroupKFold(
         n_splits=5).split(
@@ -154,9 +136,7 @@ def main(args, logger):
             'CAT_CULTURE'.casefold(),
             'CAT_SCIENCE'.casefold(),
             'CAT_LIFE_ARTS'.casefold(),
-        ]#  + additional_tokens
-
-        # fold_trn_df = pd.concat([fold_trn_df, raw_pseudo_df, opt_pseudo_df, half_opt_pseudo_df], axis=0)
+        ]
 
         trn_dataset = QUESTDataset(
             df=fold_trn_df,
@@ -165,15 +145,16 @@ def main(args, logger):
             augment=[],
             tokenizer_type=TOKENIZER_TYPE,
             pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
-            do_lower_case=DO_LOWER_CASE,
+            do_lower_case=True,
             LABEL_COL=LABEL_COL,
-            t_max_len=T_MAX_LEN,
-            q_max_len=Q_MAX_LEN,
-            a_max_len=A_MAX_LEN,
+            t_max_len=30,
+            q_max_len=239 * 2,
+            a_max_len=239 * 0,
             tqa_mode=TQA_MODE,
             TBSEP='[TBSEP]',
-            pos_id_type='arange',
+            pos_id_type='all_one',
             MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
+            rm_zero=RM_ZERO,
         )
         # update token
         trn_sampler = RandomSampler(data_source=trn_dataset)
@@ -191,15 +172,16 @@ def main(args, logger):
             augment=[],
             tokenizer_type=TOKENIZER_TYPE,
             pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
-            do_lower_case=DO_LOWER_CASE,
+            do_lower_case=True,
             LABEL_COL=LABEL_COL,
-            t_max_len=T_MAX_LEN,
-            q_max_len=Q_MAX_LEN,
-            a_max_len=A_MAX_LEN,
+            t_max_len=30,
+            q_max_len=239 * 2,
+            a_max_len=239 * 0,
             tqa_mode=TQA_MODE,
             TBSEP='[TBSEP]',
-            pos_id_type='arange',
+            pos_id_type='all_one',
             MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
+            rm_zero=RM_ZERO,
         )
         val_sampler = RandomSampler(data_source=val_dataset)
         val_loader = DataLoader(val_dataset,
@@ -211,18 +193,16 @@ def main(args, logger):
                                 pin_memory=True)
 
         fobj = BCEWithLogitsLoss()
-        # state_dict = BertModel.from_pretrained(MODEL_PRETRAIN).state_dict()
-        state_dict = torch.load('./mnt/datasets/MLM_pretrained_weights/e139_best.pth')
-        model = RobertaModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
-                                                       config_path=MODEL_CONFIG_PATH,
+        state_dict = BertModel.from_pretrained(MODEL_PRETRAIN).embeddings.state_dict()
+        model = RNNModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
                                                        state_dict=state_dict,
                                                        token_size=len(
                                                            trn_dataset.tokenizer),
                                                        MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
                                                        )
-        optimizer = optim.Adam(model.parameters(), lr=3e-5)
+        optimizer = optim.RMSprop(model.parameters(), lr=3e-4)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
+            optimizer, T_max=MAX_EPOCH, eta_min=1e-4)
 
         # load checkpoint model, optim, scheduler
         if args.checkpoint and fold == loaded_fold:
@@ -232,9 +212,9 @@ def main(args, logger):
             if fold <= loaded_fold and epoch <= loaded_epoch:
                 continue
             if epoch < 1:
-                model.freeze_unfreeze_bert(freeze=True, logger=logger)
+                model.freeze_unfreeze_rnn_embeddings(freeze=True, logger=logger)
             else:
-                model.freeze_unfreeze_bert(freeze=False, logger=logger)
+                model.freeze_unfreeze_rnn_embeddings(freeze=False, logger=logger)
             model = DataParallel(model)
             model = model.to(DEVICE)
             trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader, DEVICE)
@@ -284,8 +264,7 @@ def main(args, logger):
                 fold,
                 epoch,
                 val_loss,
-                val_metric,
-                )
+                val_metric)
         fold_best_metrics.append(np.max(histories["val_metric"][fold]))
         fold_best_metrics_raws.append(
             histories["val_metric_raws"][fold][np.argmax(histories["val_metric"][fold])])
