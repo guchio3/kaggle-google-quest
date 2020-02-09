@@ -16,13 +16,18 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
         self.model = BertModel(config)
         if state_dict:
             self.model.load_state_dict(state_dict)
-        self.classifier = nn.Linear(self.model.config.hidden_size*cat_last_layer_num, num_labels)
+        self.classifier = nn.Linear(
+            self.model.config.hidden_size *
+            cat_last_layer_num,
+            num_labels)
 
         self.cat_last_layer_num = cat_last_layer_num
         self.last_bn = last_bn
         self.head_tail = head_tail
         if last_bn:
-            self.bn = nn.BatchNorm1d(self.model.config.hidden_size*cat_last_layer_num)
+            self.bn = nn.BatchNorm1d(
+                self.model.config.hidden_size *
+                cat_last_layer_num)
         else:
             self.dropout = nn.Dropout(do_ratio)
 
@@ -30,7 +35,8 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
         if token_size:
             self.model.resize_token_embeddings(token_size)
 
-        if self.model.embeddings.position_embeddings.weight.size()[0] != MAX_SEQUENCE_LENGTH:
+        if self.model.embeddings.position_embeddings.weight.size()[
+                0] != MAX_SEQUENCE_LENGTH:
             # define input embedding and transformers
             self.model.embeddings.position_embeddings = self._resize_embeddings(
                 self.model.embeddings.position_embeddings, MAX_SEQUENCE_LENGTH)
@@ -55,12 +61,14 @@ class BertModelForBinaryMultiLabelClassifier(nn.Module):
         if self.cat_last_layer_num > 1:
             if self.head_tail:
                 pooled_output = torch.cat(
-                        [torch.mean(outputs[2][-i-1+2], dim=1) for i in range(self.cat_last_layer_num)],
-                        dim=1)
+                    [torch.mean(outputs[2][-i - 1 + 2], dim=1)
+                     for i in range(self.cat_last_layer_num)],
+                    dim=1)
             else:
                 pooled_output = torch.cat(
-                        [torch.mean(outputs[2][-i-1], dim=1) for i in range(self.cat_last_layer_num)],
-                        dim=1)
+                    [torch.mean(outputs[2][-i - 1], dim=1)
+                     for i in range(self.cat_last_layer_num)],
+                    dim=1)
         else:
             pooled_output = torch.mean(outputs[0], dim=1)
 
@@ -137,7 +145,8 @@ class RobertaModelForBinaryMultiLabelClassifier(nn.Module):
         if token_size:
             self.model.resize_token_embeddings(token_size)
 
-        if self.model.embeddings.position_embeddings.weight.size()[0] != MAX_SEQUENCE_LENGTH:
+        if self.model.embeddings.position_embeddings.weight.size()[
+                0] != MAX_SEQUENCE_LENGTH:
             # define input embedding and transformers
             self.model.embeddings.position_embeddings = self._resize_embeddings(
                 self.model.embeddings.position_embeddings, MAX_SEQUENCE_LENGTH)
@@ -219,7 +228,8 @@ class XLNetModelForBinaryMultiLabelClassifier(nn.Module):
         if token_size:
             self.model.resize_token_embeddings(token_size)
 
-        if self.model.embeddings.position_embeddings.weight.size()[0] != MAX_SEQUENCE_LENGTH:
+        if self.model.embeddings.position_embeddings.weight.size()[
+                0] != MAX_SEQUENCE_LENGTH:
             # define input embedding and transformers
             self.model.embeddings.position_embeddings = self._resize_embeddings(
                 self.model.embeddings.position_embeddings, MAX_SEQUENCE_LENGTH)
@@ -297,7 +307,8 @@ class BertModelForBinaryMultiLabelClassifier2(nn.Module):
         self.q_model.load_state_dict(q_state_dict)
         self.a_model.load_state_dict(a_state_dict)
         self.dropout = nn.Dropout(0.2)
-        self.classifier = nn.Linear(self.q_model.config.hidden_size*2, num_labels)
+        self.classifier = nn.Linear(
+            self.q_model.config.hidden_size * 2, num_labels)
 
         # resize
         if token_size:
@@ -386,3 +397,91 @@ class BertModelForBinaryMultiLabelClassifier2(nn.Module):
     #                                :] = old_embeddings.weight.data[:num_tokens_to_copy, :]
 
     #     return new_embeddings
+
+
+class RNNModelForBinaryMultiLabelClassifier(nn.Module):
+    def __init__(self, num_labels, state_dict,
+                 token_size, MAX_SEQUENCE_LENGTH=512):
+        super(RNNModelForBinaryMultiLabelClassifier, self).__init__()
+        self.lstm_hidden_size = 120
+        self.gru_hidden_size = 60
+        self.embeddings = nn.Embedding((30522, 768)).load_state_dict()
+        self.lstm = nn.LSTM(
+            768,
+            lstm_hidden_size,
+            bidirectional=True,
+            batch_first=True)
+        self.gru = nn.GRU(
+            lstm_hidden_size * 2,
+            gru_hidden_size,
+            bidirectional=True,
+            batch_first=True)
+        self.embedding_dropout = nn.Dropout2d(0.2)
+        self.dropout = nn.Dropout(p=0.1)
+        self.classifier = nn.Linear(self.gru_hidden_size * 6, num_labels)
+
+        if self.embeddings.weight.size()[0] != token_size:
+            self.embeddings = self._resize_embeddings(
+                self.embeddings, token_size)
+
+        # add modules
+        self.add_module('my_fc_output', self.classifier)
+
+    def apply_spatial_dropout(self, h_embedding):
+        h_embedding = h_embedding.transpose(1, 2).unsqueeze(2)
+        h_embedding = self.embedding_dropout(
+            h_embedding).squeeze(2).transpose(1, 2)
+        return h_embedding
+
+    def forward(self, input_ids=None, input_cats=None, labels=None, attention_mask=None,
+                token_type_ids=None, position_ids=None, head_mask=None,
+                inputs_embeds=None, encoder_hidden_states=None,
+                encoder_attention_mask=None):
+
+        h_embedding = self.embeddings(input_ids)
+        h_embedding = self.apply_spatial_dropout(h_embedding)
+
+        h_lstm, _ = self.lstm(h_embedding)
+        h_gru, hh_gru = self.gru(h_lstm)
+        hh_gru = hh_gru.view(-1, self.gru_hidden_size * 2)
+
+        avg_pool = torch.mean(h_gru, 1)
+        max_pool, _ = torch.max(h_gru, 1)
+
+        pooled_outpu = ttorch.cat(
+            self.dropout(
+                (hh_gru, avg_pool, max_pool)), 1)
+
+        logits = self.classifier(pooled_output)
+
+        # add hidden states and attention if they are here
+        outputs = (logits,) + outputs[2:]
+
+        return outputs  # logits, (hidden_states), (attentions)
+
+    def freeze_unfreeze_rnn_embeddings(self, freeze=True, logger=None):
+        if freeze:
+            print('FREEZE rnn embeddings !', logger)
+            # for name, child in self.model.module.named_children():
+            self.embeddings.requires_grad = False
+
+        else:
+            print('UNFREEZE rnn embeddings !', logger)
+            # for name, child in self.model.module.named_children():
+            self.embeddings.requires_grad = False
+
+    def _resize_embeddings(self, old_embeddings, new_num_tokens):
+        old_num_tokens, old_embedding_dim = old_embeddings.weight.size()
+        if old_num_tokens == new_num_tokens:
+            return old_embeddings
+
+        # Build new embeddings
+        new_embeddings = nn.Embedding(new_num_tokens, old_embedding_dim)
+        new_embeddings.to(old_embeddings.weight.device)
+
+        # Copy word embeddings from the previous weights
+        num_tokens_to_copy = min(old_num_tokens, new_num_tokens)
+        new_embeddings.weight.data[:num_tokens_to_copy,
+                                   :] = old_embeddings.weight.data[:num_tokens_to_copy, :]
+
+        return new_embeddings
