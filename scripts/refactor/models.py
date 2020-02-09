@@ -448,6 +448,7 @@ class RNNModelForBinaryMultiLabelClassifier(nn.Module):
         h_embedding = self.apply_spatial_dropout(h_embedding)
 
         h_lstm, _ = self.lstm(h_embedding)
+        h_lstm, _ = self.lstm2(h_lstm)
         h_gru, hh_gru = self.gru(h_lstm)
         hh_gru = hh_gru.view(-1, self.gru_hidden_size * 2)
 
