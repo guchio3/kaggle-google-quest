@@ -403,8 +403,8 @@ class RNNModelForBinaryMultiLabelClassifier(nn.Module):
     def __init__(self, num_labels, state_dict,
                  token_size, MAX_SEQUENCE_LENGTH=512):
         super(RNNModelForBinaryMultiLabelClassifier, self).__init__()
-        self.lstm_hidden_size = 1024
-        self.gru_hidden_size = 512
+        self.lstm_hidden_size = 2048
+        self.gru_hidden_size = 1024
         self.embeddings = nn.Embedding(30522, 768)
         self.embeddings.weight = self.embeddings.weight = nn.Parameter(state_dict['word_embeddings.weight'])
         self.lstm = nn.LSTM(
