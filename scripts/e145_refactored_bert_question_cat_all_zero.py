@@ -15,7 +15,7 @@ from tqdm import tqdm
 from transformers import BertModel
 
 from refactor.datasets import QUESTDataset
-from refactor.models import RNNModelForBinaryMultiLabelClassifier
+from refactor.models import BertModelForBinaryMultiLabelClassifier
 from refactor.utils import compute_spearmanr, test, train_one_epoch
 from utils import (load_checkpoint, logInit, parse_args,
                    save_and_clean_for_prediction, save_checkpoint, sel_log,
@@ -24,8 +24,8 @@ from utils import (load_checkpoint, logInit, parse_args,
 EXP_ID = os.path.basename(__file__).split('_')[0]
 MNT_DIR = './mnt'
 DEVICE = 'cuda'
-# DEVICE = 'cpu'
 MODEL_PRETRAIN = 'bert-base-uncased'
+MODEL_CONFIG_PATH = './mnt/datasets/model_configs/bert-model-uncased-config.pkl'
 TOKENIZER_TYPE = 'bert'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
@@ -152,7 +152,8 @@ def main(args, logger):
             a_max_len=239 * 0,
             tqa_mode=TQA_MODE,
             TBSEP='[TBSEP]',
-            pos_id_type='all_one',
+            pos_id_type='arange',
+            token_id_type='all_zero',
             MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
             rm_zero=RM_ZERO,
         )
@@ -179,7 +180,8 @@ def main(args, logger):
             a_max_len=239 * 0,
             tqa_mode=TQA_MODE,
             TBSEP='[TBSEP]',
-            pos_id_type='all_one',
+            pos_id_type='arange',
+            token_id_type='all_zero',
             MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
             rm_zero=RM_ZERO,
         )
@@ -193,16 +195,17 @@ def main(args, logger):
                                 pin_memory=True)
 
         fobj = BCEWithLogitsLoss()
-        state_dict = BertModel.from_pretrained(MODEL_PRETRAIN).embeddings.state_dict()
-        model = RNNModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
+        state_dict = BertModel.from_pretrained(MODEL_PRETRAIN).state_dict()
+        model = BertModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
+                                                       config_path=MODEL_CONFIG_PATH,
                                                        state_dict=state_dict,
                                                        token_size=len(
                                                            trn_dataset.tokenizer),
                                                        MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
                                                        )
-        optimizer = optim.RMSprop(model.parameters(), lr=3e-4, momentum=0.1)
+        optimizer = optim.Adam(model.parameters(), lr=3e-5)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=MAX_EPOCH, eta_min=1e-4)
+            optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
 
         # load checkpoint model, optim, scheduler
         if args.checkpoint and fold == loaded_fold:
@@ -212,9 +215,9 @@ def main(args, logger):
             if fold <= loaded_fold and epoch <= loaded_epoch:
                 continue
             if epoch < 1:
-                model.freeze_unfreeze_rnn_embeddings(freeze=True, logger=logger)
+                model.freeze_unfreeze_bert(freeze=True, logger=logger)
             else:
-                model.freeze_unfreeze_rnn_embeddings(freeze=False, logger=logger)
+                model.freeze_unfreeze_bert(freeze=False, logger=logger)
             model = DataParallel(model)
             model = model.to(DEVICE)
             trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader, DEVICE)
