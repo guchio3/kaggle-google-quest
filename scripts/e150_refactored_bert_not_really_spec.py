@@ -1,5 +1,6 @@
 import itertools
 import os
+import pickle
 import random
 from logging import getLogger
 
@@ -8,15 +9,16 @@ import pandas as pd
 import torch
 from sklearn.model_selection import GroupKFold
 from torch import optim
-from torch.nn import BCEWithLogitsLoss, DataParallel
+from torch.nn import BCEWithLogitsLoss, DataParallel, MarginRankingLoss
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import RandomSampler
 from tqdm import tqdm
 from transformers import BertModel
 
+from losses import FocalLoss, FocalLossKaggle, FocalLossWithOutOneHot
 from refactor.datasets import QUESTDataset
-from refactor.models import RNNModelForBinaryMultiLabelClassifier
-from refactor.utils import compute_spearmanr, test, train_one_epoch
+from refactor.models import BertModelForBinaryMultiLabelClassifier
+from refactor.utils import clean_data, compute_spearmanr, test, train_one_epoch
 from utils import (load_checkpoint, logInit, parse_args,
                    save_and_clean_for_prediction, save_checkpoint, sel_log,
                    send_line_notification)
@@ -26,37 +28,42 @@ MNT_DIR = './mnt'
 DEVICE = 'cuda'
 # DEVICE = 'cpu'
 MODEL_PRETRAIN = 'bert-base-uncased'
+# MODEL_CONFIG_PATH = './mnt/datasets/model_configs/bert-model-uncased-config.pkl'
+MODEL_CONFIG_PATH = './mnt/datasets/model_configs/bert-model-uncased-config-hidden.pkl'
 TOKENIZER_TYPE = 'bert'
 TOKENIZER_PRETRAIN = 'bert-base-uncased'
 BATCH_SIZE = 8
 MAX_EPOCH = 6
 MAX_SEQ_LEN = 512
+T_MAX_LEN = 30
+Q_MAX_LEN = 239 * 2
+A_MAX_LEN = 239 * 0
+DO_LOWER_CASE = True if MODEL_PRETRAIN == 'bert-base-uncased' else False
 TQA_MODE = 'tq_a'
-RM_ZERO = True
 
 
 LABEL_COL = [
-    'question_asker_intent_understanding',
-    'question_body_critical',
-    'question_conversational',
-    'question_expect_short_answer',
-    'question_fact_seeking',
-    'question_has_commonly_accepted_answer',
-    'question_interestingness_others',
-    'question_interestingness_self',
-    'question_multi_intent',
+    # 'question_asker_intent_understanding',
+    # 'question_body_critical',
+    # 'question_conversational',
+    # 'question_expect_short_answer',
+    # 'question_fact_seeking',
+    # 'question_has_commonly_accepted_answer',
+    # 'question_interestingness_others',
+    # 'question_interestingness_self',
+    # 'question_multi_intent',
     'question_not_really_a_question',
-    'question_opinion_seeking',
-    'question_type_choice',
-    'question_type_compare',
-    'question_type_consequence',
-    'question_type_definition',
-    'question_type_entity',
-    'question_type_instructions',
-    'question_type_procedure',
-    'question_type_reason_explanation',
+    # 'question_opinion_seeking',
+    # 'question_type_choice',
+    # 'question_type_compare',
+    # 'question_type_consequence',
+    # 'question_type_definition',
+    # 'question_type_entity',
+    # 'question_type_instructions',
+    # 'question_type_procedure',
+    # 'question_type_reason_explanation',
     'question_type_spelling',
-    'question_well_written',
+    # 'question_well_written',
     #    'answer_helpful',
     #    'answer_level_of_information',
     #    'answer_plausible',
@@ -81,10 +88,127 @@ def seed_everything(seed=71):
 seed_everything()
 
 
+def train_one_epoch(model, fobj, optimizer, loader, DEVICE, swa=False):
+    model.train()
+
+    running_loss = 0
+    for (qa_id, input_ids, attention_mask,
+         token_type_ids, position_ids, labels) in tqdm(loader):
+        # send them to DEVICE
+        input_ids = input_ids.to(DEVICE)
+        attention_mask = attention_mask.to(DEVICE)
+        token_type_ids = token_type_ids.to(DEVICE)
+        position_ids = position_ids.to(DEVICE)
+        labels = labels.to(DEVICE)
+
+        # forward
+        outputs = model(
+            input_ids=input_ids,
+            labels=labels,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids
+        )
+#        loss = fobj(outputs[0], labels.float())
+        shuffle_idx = torch.randperm(len(labels))
+        shuffled_logits = outputs[0][shuffle_idx]
+        shuffled_pair_labels = (
+            outputs[0] > shuffled_logits) + (outputs[0] <= shuffled_logits) * -1
+        # loss += pair_fobj(outputs[0],
+        loss = fobj(outputs[0],
+                    shuffled_logits,
+                    shuffled_pair_labels)
+
+        # backword and update
+        optimizer.zero_grad()
+        loss.backward()
+
+        optimizer.step()
+
+        # store loss to culc epoch mean
+        running_loss += loss
+    if swa:
+        print('now swa ing ...')
+        optimizer.swap_swa_sgd()
+        optimizer.bn_update(loader, model)
+
+    loss_mean = running_loss / len(loader)
+
+    return loss_mean
+
+
+def test(model, fobj, loader, DEVICE, mode):
+    model.eval()
+
+    with torch.no_grad():
+        y_preds, y_trues, qa_ids = [], [], []
+
+        running_loss = 0
+        for (qa_id, input_ids, attention_mask,
+             token_type_ids, position_ids, labels) in tqdm(loader):
+            # send them to DEVICE
+            input_ids = input_ids.to(DEVICE)
+            attention_mask = attention_mask.to(DEVICE)
+            token_type_ids = token_type_ids.to(DEVICE)
+            position_ids = position_ids.to(DEVICE)
+            labels = labels.to(DEVICE)
+
+            # forward
+            outputs = model(
+                input_ids=input_ids,
+                labels=labels,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+                position_ids=position_ids
+            )
+            logits = outputs[0]
+            if mode != 'test':
+                fobj = BCEWithLogitsLoss()
+                loss = fobj(logits, labels.float())
+
+                running_loss += loss
+
+            y_preds.append(torch.sigmoid(logits))
+            y_trues.append(labels)
+            qa_ids.append(qa_id)
+
+        loss_mean = running_loss / len(loader)
+
+        y_preds = torch.cat(y_preds).to('cpu').numpy()
+        y_trues = torch.cat(y_trues).to('cpu').numpy()
+        qa_ids = torch.cat(qa_ids).to('cpu').numpy()
+
+        if mode == 'valid':
+            metric_raws = compute_spearmanr(y_trues, y_preds)
+            metric = np.mean(metric_raws)
+        elif mode != 'test':
+            raise NotImplementedError
+        else:
+            metric_raws = None
+            metric = None
+
+    return loss_mean, metric, metric_raws, y_preds, y_trues, qa_ids
+
+
+
+
 def main(args, logger):
     # trn_df = pd.read_csv(f'{MNT_DIR}/inputs/origin/train.csv')
     trn_df = pd.read_pickle(f'{MNT_DIR}/inputs/nes_info/trn_df.pkl')
     trn_df['is_original'] = 1
+    # raw_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/raw_pseudo_tst_df.csv')
+    # half_opt_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/half_opt_pseudo_tst_df.csv')
+    # opt_pseudo_df = pd.read_csv('./mnt/inputs/pseudos/top2_e078_e079_e080_e081_e082_e083/opt_pseudo_tst_df.csv')
+    # raw_pseudo_df2 = pd.read_csv('./mnt/inputs/pseudos/top2_e121_e125_e126_e127_e128_e129/raw_pseudo_tst_df.csv')
+    # half_opt_pseudo_df2 = pd.read_csv('./mnt/inputs/pseudos/top2_e121_e125_e126_e127_e128_e129/half_opt_pseudo_tst_df.csv')
+    # opt_pseudo_df2 = pd.read_csv('./mnt/inputs/pseudos/top2_e121_e125_e126_e127_e128_e129/opt_pseudo_tst_df.csv')
+
+    # clean texts
+    # trn_df = clean_data(trn_df, ['question_title', 'question_body', 'answer'])
+
+    # load additional tokens
+    # with open('./mnt/inputs/nes_info/trn_over_10_vocab.pkl', 'rb') as fin:
+    #     additional_tokens = pickle.load(fin)
 
     gkf = GroupKFold(
         n_splits=5).split(
@@ -136,7 +260,9 @@ def main(args, logger):
             'CAT_CULTURE'.casefold(),
             'CAT_SCIENCE'.casefold(),
             'CAT_LIFE_ARTS'.casefold(),
-        ]
+        ]  # + additional_tokens
+
+        # fold_trn_df = pd.concat([fold_trn_df, raw_pseudo_df, opt_pseudo_df, half_opt_pseudo_df, raw_pseudo_df2, opt_pseudo_df2, half_opt_pseudo_df2], axis=0)
 
         trn_dataset = QUESTDataset(
             df=fold_trn_df,
@@ -145,16 +271,15 @@ def main(args, logger):
             augment=[],
             tokenizer_type=TOKENIZER_TYPE,
             pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
-            do_lower_case=True,
+            do_lower_case=DO_LOWER_CASE,
             LABEL_COL=LABEL_COL,
-            t_max_len=30,
-            q_max_len=239 * 2,
-            a_max_len=239 * 0,
+            t_max_len=T_MAX_LEN,
+            q_max_len=Q_MAX_LEN,
+            a_max_len=A_MAX_LEN,
             tqa_mode=TQA_MODE,
             TBSEP='[TBSEP]',
-            pos_id_type='all_one',
+            pos_id_type='arange',
             MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
-            rm_zero=RM_ZERO,
         )
         # update token
         trn_sampler = RandomSampler(data_source=trn_dataset)
@@ -172,16 +297,15 @@ def main(args, logger):
             augment=[],
             tokenizer_type=TOKENIZER_TYPE,
             pretrained_model_name_or_path=TOKENIZER_PRETRAIN,
-            do_lower_case=True,
+            do_lower_case=DO_LOWER_CASE,
             LABEL_COL=LABEL_COL,
-            t_max_len=30,
-            q_max_len=239 * 2,
-            a_max_len=239 * 0,
+            t_max_len=T_MAX_LEN,
+            q_max_len=Q_MAX_LEN,
+            a_max_len=A_MAX_LEN,
             tqa_mode=TQA_MODE,
             TBSEP='[TBSEP]',
-            pos_id_type='all_one',
+            pos_id_type='arange',
             MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
-            rm_zero=RM_ZERO,
         )
         val_sampler = RandomSampler(data_source=val_dataset)
         val_loader = DataLoader(val_dataset,
@@ -192,17 +316,22 @@ def main(args, logger):
                                 drop_last=False,
                                 pin_memory=True)
 
-        fobj = BCEWithLogitsLoss()
-        state_dict = BertModel.from_pretrained(MODEL_PRETRAIN).embeddings.state_dict()
-        model = RNNModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
+        # fobj = BCEWithLogitsLoss()
+        # fobj = FocalLossKaggle(gamma=2)
+        fobj = MarginRankingLoss()
+        state_dict = BertModel.from_pretrained(MODEL_PRETRAIN).state_dict()
+        model = BertModelForBinaryMultiLabelClassifier(num_labels=len(LABEL_COL),
+                                                       config_path=MODEL_CONFIG_PATH,
                                                        state_dict=state_dict,
                                                        token_size=len(
                                                            trn_dataset.tokenizer),
                                                        MAX_SEQUENCE_LENGTH=MAX_SEQ_LEN,
+                                                       cat_last_layer_num=1,
+                                                       do_ratio=0.2,
                                                        )
-        optimizer = optim.RMSprop(model.parameters(), lr=3e-4, momentum=0.1)
+        optimizer = optim.Adam(model.parameters(), lr=3e-5)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=MAX_EPOCH, eta_min=1e-4)
+            optimizer, T_max=MAX_EPOCH, eta_min=1e-5)
 
         # load checkpoint model, optim, scheduler
         if args.checkpoint and fold == loaded_fold:
@@ -212,12 +341,13 @@ def main(args, logger):
             if fold <= loaded_fold and epoch <= loaded_epoch:
                 continue
             if epoch < 1:
-                model.freeze_unfreeze_rnn_embeddings(freeze=True, logger=logger)
+                model.freeze_unfreeze_bert(freeze=True, logger=logger)
             else:
-                model.freeze_unfreeze_rnn_embeddings(freeze=False, logger=logger)
+                model.freeze_unfreeze_bert(freeze=False, logger=logger)
             model = DataParallel(model)
             model = model.to(DEVICE)
-            trn_loss = train_one_epoch(model, fobj, optimizer, trn_loader, DEVICE)
+            trn_loss = train_one_epoch(
+                model, fobj, optimizer, trn_loader, DEVICE)
             val_loss, val_metric, val_metric_raws, val_y_preds, val_y_trues, val_qa_ids = test(
                 model, fobj, val_loader, DEVICE, mode='valid')
 
@@ -264,7 +394,8 @@ def main(args, logger):
                 fold,
                 epoch,
                 val_loss,
-                val_metric)
+                val_metric,
+            )
         fold_best_metrics.append(np.max(histories["val_metric"][fold]))
         fold_best_metrics_raws.append(
             histories["val_metric_raws"][fold][np.argmax(histories["val_metric"][fold])])
