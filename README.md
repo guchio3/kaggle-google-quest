@@ -1,4 +1,5 @@
-# kaggle-google-quest
+# kaggle-google-quest (19th place solution of the [kaggle competition](https://www.kaggle.com/c/google-quest-challenge/overview))
+
 ### env settings and its basic usage
  1. build kaggle gpu image in your local env (because it's based on kaggle gpu image, which does not exist some-hub officially)
      - `git clone git@github.com:Kaggle/docker-python.git; cd docker-python; ./build --gpu` 
